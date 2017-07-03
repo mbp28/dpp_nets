@@ -1,3 +1,5 @@
+import torch
+
 def compute_alpha(reinforce_grads, logprob_grads, mean=False, noflip=False, clip=False): 
     """
     reinforce_grads is expected to be a list of Tensors that hold the REINFORCE gradients
@@ -20,9 +22,7 @@ def compute_alpha(reinforce_grads, logprob_grads, mean=False, noflip=False, clip
     cov_reinforce_score = torch.mean(reinforce_grads * scores, dim=0)
     alpha = (cov_reinforce_score / score_var).squeeze(0)
     alpha[alpha != alpha] = 0
-    
-    #print(alpha.min(), alpha.max())
-        
+            
     if mean:
         alpha = torch.DoubleTensor([alpha.mean()]).expand_as(alpha)
     
