@@ -1,6 +1,15 @@
-import dpp_nets.my_torch 
+import dpp_nets.my_torch
 import numpy as np 
-class DPP_Regressor(nn.Module):
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.autograd import Variable
+from dpp_nets.my_torch.controlvar import compute_alpha
+from dpp_nets.my_torch.linalg import my_svd
+
+from collections import defaultdict
+
+class DPPRegressor(nn.Module):
     
     def __init__(self, network_params, dtype):
         """
@@ -8,7 +17,7 @@ class DPP_Regressor(nn.Module):
         - network_params: see below for which parameters must specify
         - dtype: torch.DoubleTensor or torch.FloatTensor
         """
-        super(DPP_Regressor, self).__init__()
+        super(DPPRegressor, self).__init__()
         
         # Read in parameters
         self.set_size = network_params['set_size'] # 40
@@ -18,14 +27,14 @@ class DPP_Regressor(nn.Module):
         self.pred_in = network_params['pred_in'] 
         self.pred_h = network_params['pred_h']
         self.pred_out = network_params['pred_out']
-        assert int(self_emb_in / 2) == self.pred_in
+        assert int(self.emb_in / 2) == self.pred_in
         self.dtype = dtype
 
         # Initialize Network
         self.emb_layer = torch.nn.Sequential(nn.Linear(self.emb_in, self.emb_h), nn.ELU(),
                                              nn.Linear(self.emb_h, self.emb_out))
-        self.dpp_layer = my_torch.DPPLayer(self.dtype)
-        self.prediction_layer = torch.nn.Sequential(nn.Linear(self.pred_in, self.pred_h), nn.ReLU(), 
+        self.dpp_layer = dpp_nets.my_torch.DPPLayer(self.dtype)
+        self.pred_layer = torch.nn.Sequential(nn.Linear(self.pred_in, self.pred_h), nn.ReLU(), 
                                                     nn.Linear(self.pred_h, self.pred_out))
         # Choose MSELoss as training criterion
         self.criterion = nn.MSELoss()
@@ -37,6 +46,36 @@ class DPP_Regressor(nn.Module):
         self.pred = None
 
         self.type(self.dtype)
+
+        # A varierty of convenience dictionaries
+        # For alpha iteration
+        self.alpha_dict = defaultdict(list)
+        self.a_score_dict = defaultdict(list) # never delete
+        self.a_reinforce_dict = defaultdict(list) # never delete
+        self.a_loss_dict = defaultdict(list)
+
+        # Gradients
+        self.score_dict = defaultdict(list)
+        self.reinforce_dict = defaultdict(list)
+        self.control_dict = defaultdict(list)
+
+        # Prediction & Loss
+        self.embedding_dict = defaultdict(list)
+        self.subset_dict = defaultdict(list)
+        self.pred_dict = defaultdict(list)
+        self.loss_dict = defaultdict(list)
+        self.total_loss = defaultdict(list)
+
+        # Network weights
+        self.emb_w1_max = defaultdict(list)
+        self.emb_w1_mean = defaultdict(list)
+        self.emb_w2_max = defaultdict(list)
+        self.emb_w2_mean = defaultdict(list)
+
+        self.pred_w1_max = defaultdict(list)
+        self.pred_w1_mean = defaultdict(list)
+        self.pred_w2_max = defaultdict(list)
+        self.pred_w2_mean = defaultdict(list)
 
 
     def forward(self, words, context):
@@ -54,13 +93,13 @@ class DPP_Regressor(nn.Module):
         self.embedding = self.emb_layer(x)
 
         # Sample a subset of words from the DPP
-        self.subset = self.dpp_layer(self.embedding)
+        self.subset = torch.diag(self.dpp_layer(self.embedding))
         
         # Filter out the selected words and combine them
         self.pick = self.subset.mm(words).sum(0)
 
         # Compute a prediction based on the sampled words
-        self.pred = self.prediction_layer(self.filtered)
+        self.pred = self.pred_layer(self.pick)
 
         return self.pred
 
@@ -102,7 +141,7 @@ class DPP_Regressor(nn.Module):
         # Wrap into Variables 
         words = Variable(self.dtype(words))
         context = Variable(self.dtype(context))
-        target = Variable(self.dtype([n_clusters]))
+        target = Variable(self.dtype(n_clusters.astype(np.float64)))
 
         return words, context, target 
 
@@ -122,103 +161,84 @@ class DPP_Regressor(nn.Module):
         print("Target sampled was: ", target.data[0])
         print("Network predicted: ", self.pred.data[0])
         print("Resulting loss is: ", self.criterion(self.pred, target))
-
         print("Prediction was based on ", self.subset.data.sum(), "observations.")
 
-        return (self.pred, y), (x1, x2)
-    
-    def train(self, train_iter, batch_size, lr, reg):
-        
-        self.lr = lr
-        self.batch_size = batch_size
-        
-        self.optimizer = optim.SGD([{'params': self.emb_layer.parameters(), 'weight_decay': self.reg_kern},
-                                    {'params': self.prediction_layer.parameters()}],
-                                    lr = self.lr / self.batch_size)
-
-        for t in range(train_iter):
-            x1, x2, y, _ = self.gen_data()
-            #print("x is", x,"y is", y)
-            #self.x_dict[t].append(x.data)
-            #self.y_dict[t].append(y.data)
+        return (self.pred, target), (words, context)
             
-            mod_grad = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: (grad_in[0] * loss.data[0],))
-            y_pred = self.forward(x1, x2)
-            
-            self.y_pred_dict[t].append(y_pred.data)
-            self.emb_dict[t].append(self.embedding.data)
-            self.subset_dict[t].append(self.subset.data)
-            self.summed_dict[t].append(self.filtered_and_summed_x.data)
-
-            loss = self.criterion(y_pred,y)
-            #print()
-            self.loss_dict[t].append(loss.data)
-            reg_loss = loss + reg * torch.pow(torch.trace(self.embedding),2)
-            
-            reg_loss.backward()
-
-            mod_grad.remove()
-            
-            if (t + 1) % self.batch_size == 0:
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-
-            if (t + 1) % 50 == 0:
-                print(t + 1, loss.data[0])
-                
-            #exp_lr_scheduler(self.optimizer, t, lr_decay=lr_decay, lr_decay_step=ev_step)
-            
-    def train_with_baseline(self, train_iter, batch_size, sample_iter, alpha_iter, lr, reg_kern, aggregate=False):
-        
-        # Prepare Optimizer
-        optimizer = optim.SGD([{'params': self.emb_layer.parameters(), 
-                                'weight_decay': reg_kern * batch_size * sample_iter},
-                               {'params': self.prediction_layer.parameters()}], 
-                              lr = lr / (batch_size * sample_iter))
+    def train_with_baseline(self, train_iter, batch_size, sample_iter, alpha_iter, lr, weight_decay, reg_exp, reg_var, overwrite=0):
         
         # Clear dictionaries
+        # For alpha iteration
+        self.alpha_dict.clear()
+        self.a_score_dict.clear()
+        self.a_reinforce_dict.clear()
+        self.a_loss_dict.clear()
+
+        # Gradients
         self.score_dict.clear()
-        self.score_mean.clear()
-        self.score_var.clear()
         self.reinforce_dict.clear()
-        self.reinforce_mean.clear()
-        self.reinforce_var.clear()
+        self.control_dict.clear()
+
+        # Prediction & Loss
+        self.embedding_dict.clear()
+        self.subset_dict.clear()
+        self.pred_dict.clear()
         self.loss_dict.clear()
-        self.loss_mean.clear()
-        self.loss_var.clear()
-        self.mod_dict.clear()
-        self.mod_mean.clear()
-        self.mod_var.clear()
+        self.total_loss.clear()
+
+        # Network weights
+        self.emb_w1_max.clear()
+        self.emb_w1_mean.clear()
+        self.emb_w2_max.clear()
+        self.emb_w2_mean.clear()
+
+        self.pred_w1_max.clear()
+        self.pred_w1_mean.clear()
+        self.pred_w2_max.clear()
+        self.pred_w2_mean.clear()
+
+        # Prepare Optimizer
+        optimizer = optim.SGD([{'params': self.emb_layer.parameters()},
+                               {'params': self.pred_layer.parameters(),
+                               'weight_decay': weight_decay * batch_size * sample_iter}], 
+                              lr = lr / (batch_size * sample_iter))
         
+
         for t in range(train_iter):
-            
-            self.weight_norm_1[t] = torch.mean(torch.pow(self.emb_layer[0].weight.data,2))
-            self.weight_max_1[t] = torch.max(torch.pow(self.emb_layer[0].weight.data,2))
-            self.weight_norm_2[t] = torch.mean(torch.pow(self.emb_layer[2].weight.data,2))
-            self.weight_max_2[t] = torch.max(torch.pow(self.emb_layer[2].weight.data,2))
 
             # Draw a Training Sample
-            words, context, y = self.generate()
+            words, context, target = self.generate()
             
+            # Save current weights
+            self.emb_w1_max[t].append(self.dtype([torch.max(torch.abs(self.emb_layer[0].weight.data))]))
+            self.emb_w1_mean[t].append(self.dtype([torch.mean(torch.abs(self.emb_layer[0].weight.data))]))
+            self.emb_w2_max[t].append(self.dtype([torch.max(torch.abs(self.emb_layer[2].weight.data))]))
+            self.emb_w2_mean[t].append(self.dtype([torch.mean(torch.abs(self.emb_layer[2].weight.data))]))
+
+            self.pred_w1_max[t].append(self.dtype([torch.max(torch.abs(self.pred_layer[0].weight.data))]))
+            self.pred_w1_mean[t].append(self.dtype([torch.mean(torch.abs(self.pred_layer[0].weight.data))]))
+            self.pred_w2_max[t].append(self.dtype([torch.max(torch.abs(self.pred_layer[2].weight.data))]))
+            self.pred_w2_mean[t].append(self.dtype([torch.mean(torch.abs(self.pred_layer[2].weight.data))]))
+
+            # Estimate alpha
             # Save score, build reinforce gradient, save reinforce gradient
             save_score = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: self.a_score_dict[t].append(grad_in[0].data))
             reinforce_grad = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: (grad_in[0] * (loss.data[0]),))
             save_reinforce = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: self.a_reinforce_dict[t].append(grad_in[0].data))
             
-            # Estimate alpha
             if alpha_iter:
                 for i in range(alpha_iter):                                      
-                    y_pred = self.forward(x1, x2)
-                    loss = self.criterion(y_pred, y)
+                    self.forward(words, context)
+                    loss = self.criterion(self.pred, target)
+                    self.a_loss_dict[t].append(loss.data)
                     loss.backward()
 
-                self.alpha = compute_alpha(self.a_reinforce_dict[t], self.a_score_dict[t], False, True, False).double()
+                self.alpha = compute_alpha(self.a_reinforce_dict[t], self.a_score_dict[t], False, False, False).type(self.dtype)
                 self.zero_grad()
-                self.alphas[t].append(self.alpha)
+                self.alpha_dict[t].append(self.alpha)
                 
             else:
-                self.alpha = torch.zeros(self.embedding.size()).double()
-                #self.alpha = 0
+                self.alpha = overwrite * torch.ones(self.embedding.size()).type(self.dtype)
                     
             save_score.remove()
             reinforce_grad.remove()
@@ -227,21 +247,37 @@ class DPP_Regressor(nn.Module):
             # now actual training
             # save scores, reinforce, implement baseline gradient, save baseline gradient
             save_score = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: self.score_dict[t].append(grad_in[0].data))
-            save_reinforce = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: self.reinforce_dict[t].append(grad_in[0].data * loss.data[0]))
+            save_reinforce = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: self.reinforce_dict[t].append(grad_in[0].data *  loss.data[0]))
             modify_grad = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: (Variable(grad_in[0].data * (loss.data[0] - self.alpha)),))
-            save_modified = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: self.mod_dict[t].append(grad_in[0].data))
+            save_control = self.dpp_layer.register_backward_hook(lambda module, grad_in, grad_out: self.control_dict[t].append(grad_in[0].data))
 
             # sample multiple times from the DPP and backpropagate associated gradients!
             for i in range(sample_iter):
-                y_pred = self.forward(x1, x2)
-                loss = self.criterion(y_pred, y)
+                self.forward(words, context)
+                loss = self.criterion(self.pred, target)
+
+                self.embedding_dict[t].append(self.embedding.data)
+                self.subset_dict[t].append(self.subset.data)
+                self.pred_dict[t].append(self.pred.data)
                 self.loss_dict[t].append(loss.data) # save_loss
-                loss.backward()
+
+                if not reg_exp and not reg_var:
+                    loss.backward()
+
+                else: 
+                    TRUE_MEAN = 10.5
+                    _, s, _ = my_svd()(self.embedding)
+                    exp = torch.sum(s**2 / (s**2 + 1))
+                    var = exp - torch.sum(s**4 / ((s**2 + 1) **2))
+                    reg_loss = reg_exp * ((exp - TRUE_MEAN)**2) + reg_var * var
+                    total_loss = loss + reg_loss
+                    self.total_loss[t].append(total_loss)
+                    total_loss.backward()
 
             # update parameters after processing a batch
-            if (t + 1) % self.batch_size == 0:
-                self.optimizer.step()
-                self.optimizer.zero_grad()
+            if (t + 1) % batch_size == 0:
+                optimizer.step()
+                optimizer.zero_grad()
 
             # print loss
             if (t + 1) % 50 == 0:
@@ -250,54 +286,40 @@ class DPP_Regressor(nn.Module):
             save_score.remove()
             save_reinforce.remove()
             modify_grad.remove()
-            save_modified.remove()
+            save_control.remove()
 
-            
-            # anneal learning rate
-            #exp_lr_scheduler(self.optimizer, t, lr_decay=lr_decay, lr_decay_step=ev_step)
-                
-        # Update Dictionaries
-        self.score_mean = {k: torch.mean(torch.stack(v)) for k, v in self.score_dict.items()}
-        self.score_var  = {k: torch.mean(torch.var(torch.stack(v), dim=0)) for k, v in self.score_dict.items()}
-        self.score_coef = {k: torch.mean(torch.std(torch.stack(v), dim=0) / torch.mean(torch.stack(v), dim=0))
-                          for k, v in self.score_dict.items()}
-
-        self.reinforce_mean = {k: torch.mean(torch.stack(v)) for k, v in self.reinforce_dict.items()}
-        self.reinforce_var  = {k: torch.mean(torch.var(torch.stack(v), dim=0)) for k, v in self.reinforce_dict.items()}
-        self.reinforce_coef = {k: torch.mean(torch.std(torch.stack(v), dim=0) / torch.mean(torch.stack(v), dim=0))
-                          for k, v in self.reinforce_dict.items()}
-
-        self.loss_mean = {k: torch.mean(torch.stack(v)) for k, v in self.loss_dict.items()}
-        self.loss_var  = {k: torch.mean(torch.var(torch.stack(v), dim=0)) for k, v in self.loss_dict.items()}
-        self.loss_coef = {k: torch.mean(torch.std(torch.stack(v), dim=0) / torch.mean(torch.stack(v), dim=0))
-                          for k, v in self.loss_coef.items()}
-
-        self.mod_mean = {k: torch.mean(torch.stack(v)) for k, v in self.mod_dict.items()}
-        self.mod_var  = {k: torch.mean(torch.var(torch.stack(v), dim=0)) for k, v in self.mod_dict.items()}
-        self.mod_coef = {k: torch.mean(torch.std(torch.stack(v), dim=0) / torch.mean(torch.stack(v), dim=0))
-                          for k, v in self.mod_dict.items()}
-
-                        
     def evaluate(self, test_iter):
 
-        loss = 0.0
-        subset_count = 0.0
+        loss_sum = 0.0
+        subset_mean = 0.0
+        temp = 0.0
         
         for t in range(test_iter):
             words, context, target = self.generate()
-            self.forward(x1, x2)
-            loss += self.criterion(self.pred, target)
-            subset_count += self.subset.data.sum()
+            self.forward(words, context)
+            loss_sum += self.criterion(self.pred, target)
+
+            # Subset Statistics
+            delta = self.subset.data.sum() - subset_mean
+            subset_mean += delta / (t+1)
+            delta2 = delta / (t+1)
+            temp += delta * delta2
             
-        print("Average Loss is: ", loss / test_iter) 
-        print("Average Subset Size is: ", subset_count / test_iter)
+        subset_var = temp / (test_iter - 1)
+        loss_av = loss_sum / test_iter
+
+        print("Average Loss is: ", loss_av) 
+        print("Average Subset Size is: ", subset_mean)
+        print("Subset Variance is: ", subset_var)
+
+        return loss_av, subset_mean, subset_var
         
     def reset_parameter(self):
         self.emb_layer[0].reset_parameters()
         self.emb_layer[2].reset_parameters()
-        self.prediction_layer[0].reset_parameters()
-        self.prediction_layer[2].reset_parameters()
+        self.pred_layer[0].reset_parameters()
+        self.pred_layer[2].reset_parameters()
         
         self.optimizer = optim.SGD([{'params': self.emb_layer.parameters(), 'weight_decay': self.reg_kern},
-                                    {'params': self.prediction_layer.parameters()}],
+                                    {'params': self.pred_layer.parameters()}],
                                     lr = self.lr / self.batch_size)

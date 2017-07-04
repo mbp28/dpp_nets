@@ -4,9 +4,7 @@ def compute_alpha(reinforce_grads, logprob_grads, mean=False, noflip=False, clip
     """
     reinforce_grads is expected to be a list of Tensors that hold the REINFORCE gradients
     logprob_grads is expected to be a list of Tensors that hold the SCORES
-    
-    returns the estimated optimal alpha, either a meaned version, or individual ones,
-    
+        
     """
     assert len(reinforce_grads) == len(logprob_grads)
     

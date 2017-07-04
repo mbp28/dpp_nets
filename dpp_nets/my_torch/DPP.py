@@ -62,4 +62,4 @@ class DPPLayer(nn.Module):
         self.dtype = dtype
 
     def forward(self, embd):
-        return torch.diag(DPP(self.dtype)(embd))
+        return DPP(self.dtype)(embd)
