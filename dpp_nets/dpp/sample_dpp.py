@@ -10,6 +10,10 @@ def sample_dpp(vals, vecs, k=0, one_hot=False):
     vecs: Numpy 2D Array of Eigenvectors of Kernel Matrix
 
     """
+    # Extract real part
+    vals = np.real(vals)
+    vecs = np.real(vecs)
+
     n = vecs.shape[0] # number of items in ground set
     
     # k-DPP
