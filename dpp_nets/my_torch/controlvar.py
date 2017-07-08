@@ -16,7 +16,7 @@ def compute_alpha(reinforce_grads, logprob_grads, el_mean=False):
     reinforce_grads = reinforce_grads - torch.mean(reinforce_grads, dim=0).expand_as(reinforce_grads)
 
 
-    assert reinforce_grads.shape == scores.shape
+    assert reinforce_grads.size() == scores.size()
     
     score_var = torch.var(scores, dim=0)
     cov_reinforce_score = torch.mean(reinforce_grads * scores, dim=0)

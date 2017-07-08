@@ -228,7 +228,7 @@ class DPPRegressor(nn.Module):
             if (t + 1) % 50 == 0:
                 print(t + 1, loss.data[0])
 
-    def train_predictor(self, train_iter, batch_size, lr):
+    def train_predictor(self, train_iter, batch_size, lr, ground=False):
         """
         Instead of jointly training the network, we only train the predictor network based on the entire ground
         set. 
@@ -241,8 +241,13 @@ class DPPRegressor(nn.Module):
 
         for t in range(train_iter):
             words, context, target = self.generate()
-            self.pick = words.sum(0)
-            self.pred = self.pred_layer(self.pick)
+
+            if ground: # train based on all words
+                self.pick = words.sum(0)
+                self.pred = self.pred_layer(self.pick)
+            else:  # train based on current DPP selection
+                self.forward(words, context)
+
             self.pred_dict[t].append(self.pred.data)
             loss = self.criterion(self.pred, target)
             self.loss_dict[t].append(loss.data) 
@@ -448,6 +453,62 @@ class DPPRegressor(nn.Module):
         print("Average Subset Size: ", subset_mean)
         print("Subset Variance: ", subset_var)
         print("Proportion of true clusters retrieved:", n_detected_sum/ true_n_sum)
+
+
+    def evaluate_random_selector(test_iter, subset_size):
+
+        loss_sum = 0.0
+        true_n_sum = 0.0
+        n_detected_sum = 0.0
+
+        subset_mean = 0.0
+        temp = 0.0
+
+        p_elem = float(subset_size) / self.set_size
+
+        for t in range(test_iter):
+            # Sample
+            words, context, target, clusters = self.generate(full=True)
+        
+            # Assigns prediction to self.pred
+            self.subset = Variable(self.dtype(torch.diag(torch.rand(self.set_size) < p_elem)))
+        
+            # Filter out the selected words and combine them
+            self.pick = self.subset.mm(words).sum(0)
+
+            # Compute a prediction based on the sampled words
+            self.pred = self.pred_layer(self.pick)
+
+            # How many true clusters existed?
+            true_n = target.data[0]
+            true_n_sum += true_n
+
+            # What was the loss?
+            loss = self.criterion(self.pred, target).data[0]
+            loss_sum += loss
+
+            # How many different clusters were detected?
+            true_ix = clusters.numpy()
+            retr_ix = torch.diag(self.subset.data).numpy()
+            detected = true_ix[retr_ix.astype(bool)]
+            n_detected = np.unique(detected).size
+            n_detected_sum += n_detected
+
+            # Gather subset statistics
+            delta = self.subset.data.sum() - subset_mean
+            subset_mean += delta / (t+1)
+            delta2 = delta / (t+1)
+            temp += delta * delta2
+        
+        subset_var = temp / test_iter
+        loss_av = loss_sum / test_iter
+
+        print("Average Loss is: ", loss_av) 
+        print("Average Subset Size: ", subset_mean)
+        print("Subset Variance: ", subset_var)
+        print("Proportion of true clusters retrieved:", n_detected_sum/ true_n_sum)
+
+
         
     def reset_parameter(self):
         self.emb_layer[0].reset_parameters()
