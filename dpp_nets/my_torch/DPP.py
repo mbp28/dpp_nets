@@ -63,3 +63,61 @@ class DPPLayer(nn.Module):
 
     def forward(self, embd):
         return DPP(self.dtype)(embd)
+
+class DPP2(Function):
+    """
+    Uses Numpy Functions to sample from the DPP implicitly 
+    defined through embd, returns score as a gradient in the
+    backward computation (needs to be complemented by hooks
+    for REINFORCE or control variate training)
+
+    Arguments:
+    Depending on whether you're training Double or Float, provide
+    dtype = torch.FloatTensor
+    dtype = torch.DoubleTensor
+    """
+    def __init__(self, dtype):
+        self.dtype = dtype
+
+    def forward(self, vals, vecs):
+        """
+        Given L = E * E.t() and E = u * s * v.t()
+        vals are the eigenvalues of L, respectively s**2
+        vecs are the eigenvectors of L, respectively u
+        """
+
+        # Transform to numpy
+        e = vals.numpy()
+        v = vecs.numpy()
+
+        # Sample subset from the DPP
+        subset = torch.from_numpy(dpp.sample_dpp(e, v, one_hot=True))
+        subset = subset.type(self.dtype)
+
+        # Save tensors for backward (gradient computation)
+        self.save_for_backward(vals, vecs, subset)
+
+        return subset
+        
+    def backward(self, grad_output):
+        vals, vecs, subset = self.saved_tensors
+        n_selected = int(subset.sum())
+
+        # from full matrix
+        from_full = 1 / vals
+
+        # from subset
+        P = torch.diag(subset)
+        P = P[subset.expand_as(P).t().byte()].view(n_selected, -1)
+
+        submat = P.mm(vecs).mm(vals.diag()).mm(vecs.t()).mm(P.t())
+        submat_inv = submat.inverse()
+        med = P.t().mm(submat_inv).mm(P).mm(vecs)
+
+        grad_vals = self.dtype(vecs.t().mm(med).diag() + from_full)
+        grad_vecs = self.dtype(2 * med.mm(vals.diag()))
+
+        return grad_vals, grad_vecs
+
+
+

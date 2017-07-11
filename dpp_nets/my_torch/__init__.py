@@ -8,5 +8,6 @@ import numpy as np
 
 
 from dpp_nets.my_torch.DPP import DPP
+from dpp_nets.my_torch.DPP import DPP2
 from dpp_nets.my_torch.DPP import DPPLayer
 from dpp_nets.my_torch.regressor import DPPRegressor

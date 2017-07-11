@@ -15,6 +15,7 @@ def sample_dpp(vals, vecs, k=0, one_hot=False):
     vecs = np.real(vecs)
 
     n = vecs.shape[0] # number of items in ground set
+    n_vals = vals.shape[0]
     
     # k-DPP
     if k:
@@ -22,7 +23,7 @@ def sample_dpp(vals, vecs, k=0, one_hot=False):
 
     # Sample set size
     else:
-        index = (np.random.rand(n) < (vals / (vals + 1)))
+        index = (np.random.rand(n_vals) < (vals / (vals + 1)))
         k = np.sum(index)
     
     # Check for empty set
