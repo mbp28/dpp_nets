@@ -5,6 +5,19 @@ from torch.autograd import Variable
 
 import dpp_nets.dpp as dpp
 
+def delete_col(matrix, col_ix):
+    
+    if col_ix == 0:
+        return matrix[:,1:]
+    
+    if (col_ix + 1) == matrix.size(1):
+        return matrix[:,:col_ix]
+    else:
+        chunk1 = matrix[:, :col_ix]
+        chunk2 = matrix[:, (col_ix + 1):]
+        new_mat = torch.cat([chunk1, chunk2], dim=1)
+        return new_mat
+
 class DPP(Function):
     """
     Uses Numpy Functions to sample from the DPP implicitly 
@@ -64,7 +77,7 @@ class DPPLayer(nn.Module):
     def forward(self, embd):
         return DPP(self.dtype)(embd)
 
-class DPP2(Function):
+class toy_DPP(Function):
     """
     Uses Numpy Functions to sample from the DPP implicitly 
     defined through embd, returns score as a gradient in the
