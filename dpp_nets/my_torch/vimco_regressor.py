@@ -9,7 +9,107 @@ from dpp_nets.my_torch.linalg import my_svd
 
 from collections import defaultdict
 
-class DPPRegressor(nn.Module):
+def delete_col(matrix, col_ix):
+    
+    if matrix.size(1) == 1:
+        matrix.
+    
+    if col_ix == 0:
+        return matrix[:,1:]
+    
+    if (col_ix + 1) == matrix.size(1):
+        return matrix[:,:col_ix]
+    else:
+        chunk1 = matrix[:, :col_ix]
+        chunk2 = matrix[:, (col_ix + 1):]
+        new_mat = torch.cat([chunk1, chunk2], dim=1)
+        return new_mat
+
+class DPP(Function):
+    
+    def forward(self, vals, vecs):
+        n = vecs.size(0)
+        n_vals = vals.size(0)
+        
+        index = torch.rand(n_vals) < (vals / (vals + 1))
+        k = torch.sum(index)
+        print(k)
+        if not k:
+            subset = torch.zeros(n)
+        
+        if k == n:
+            subset =  torch.ones(n)
+
+        else:
+            V = vecs[index.expand_as(vecs)].view(n, -1)
+            subset = torch.zeros(n)
+
+            for i in range(k):
+                p = torch.sum(V**2, dim=1)
+                p = torch.cumsum(p / torch.sum(p), 0) # item cumulative probabilities
+                _, item = (torch.rand(1)[0] < p).max(0)
+                subset[item[0,0]] = 1
+
+                _, j = (torch.abs(V[item[0,0], :]) > 0).max(0)
+                Vj = V[:, j[0]]
+                if V.size(1) > 1:
+                    V = delete_col(V, j[0])
+                    V = V - torch.mm(Vj.unsqueeze(1), V[item[0,0], :].unsqueeze(1).t() / Vj[item[0,0]])
+                    # find a new orthogonal basis
+                    for a in range(V.size(1)):
+                        for b in range(a):
+                            V[:,a] = V[:,a] - V[:,a].dot(V[:,b]) * V[:,b]
+                        V[:,a] = V[:,a] / torch.norm(V[:,a])
+                    
+        self.save_for_backward(vals, vecs, subset) 
+        
+        return subset
+        
+    def backward(self, grad_subset):
+        
+        vals, vecs, subset = self.saved_tensors
+        matrix = vecs.mm(vals.diag()).mm(vecs.t())
+        P = torch.eye(5).masked_select(subset.expand(5,5).t().byte()).view(subset.long().sum(),-1)
+        submatrix = P.mm(matrix).mm(P.t())
+        subinv = torch.inverse(submatrix)
+        Pvecs = P.mm(vecs)
+        
+        
+        grad_vals = 1 / vals
+        grad_vals += Pvecs.t().mm(subinv).mm(Pvecs).diag()
+        grad_vecs = P.t().mm(subinv).mm(Pvecs).mm(vals.diag())
+        
+        return grad_vals, grad_vecs
+
+class custom_eig(Function):
+    
+    def forward(self, matrix):
+        assert matrix.size(0) == matrix.size(1)
+        e, v = torch.eig(matrix, eigenvectors=True)
+        e = e[:,0]
+        self.save_for_backward(e, v)
+        return e, v
+
+    def backward(self, grad_e, grad_v):
+        e, v = self.saved_tensors
+        dim = v.size(0)
+        E = e.expand(dim, dim) - e.expand(dim, dim).t()
+        I = E.new(dim, dim).copy_(torch.eye(dim))
+        F = (1 / (E + I)) - I 
+        M = grad_e.diag() + F * (v.t().mm(grad_v))
+        grad_matrix = v.mm(M).mm(v.t())
+        return grad_matrix
+
+class DPPLayer(nn.Module):
+
+    def __init__(self):
+        super(DPPLayer, self).__init__()
+
+    def forward(self, e, v):
+        return DPP()(e, v)
+
+
+class VIMCO_Regressor(nn.Module):
     
     def __init__(self, network_params, dtype):
         """
@@ -17,7 +117,7 @@ class DPPRegressor(nn.Module):
         - network_params: see below for which parameters must specify
         - dtype: torch.DoubleTensor or torch.FloatTensor
         """
-        super(DPPRegressor, self).__init__()
+        super(VIMCO_Regressor, self).__init__()
         
         # Read in parameters
         self.set_size = network_params['set_size'] # 40
@@ -34,10 +134,10 @@ class DPPRegressor(nn.Module):
         # Initialize Network
         self.emb_layer = torch.nn.Sequential(nn.Linear(self.emb_in, self.emb_h), nn.ELU(),
                                              nn.Linear(self.emb_h, self.emb_out))
-        self.dpp_layer = dpp_nets.my_torch.DPPLayer(self.dtype)
+        self.eig = custom_eig()
+        self.dpp_sample = DPP()
         self.pred_layer = torch.nn.Sequential(nn.Linear(self.pred_in, self.pred_h), nn.ReLU(), 
                                                     nn.Linear(self.pred_h, self.pred_out))
-        self.weak_predictor = None
         # Choose MSELoss as training criterion
         self.criterion = nn.MSELoss()
 
@@ -97,6 +197,7 @@ class DPPRegressor(nn.Module):
         self.embedding = self.emb_layer(x)
 
         # Sample a subset of words from the DPP
+        
         self.subset = torch.diag(self.dpp_layer(self.embedding))
         
         # Filter out the selected words and combine them
