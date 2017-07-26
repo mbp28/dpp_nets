@@ -9,22 +9,6 @@ from dpp_nets.my_torch.linalg import my_svd
 
 from collections import defaultdict
 
-def delete_col(matrix, col_ix):
-    
-    if matrix.size(1) == 1:
-        matrix.
-    
-    if col_ix == 0:
-        return matrix[:,1:]
-    
-    if (col_ix + 1) == matrix.size(1):
-        return matrix[:,:col_ix]
-    else:
-        chunk1 = matrix[:, :col_ix]
-        chunk2 = matrix[:, (col_ix + 1):]
-        new_mat = torch.cat([chunk1, chunk2], dim=1)
-        return new_mat
-
 class DPP(Function):
     
     def forward(self, vals, vecs):
