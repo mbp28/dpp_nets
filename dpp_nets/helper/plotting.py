@@ -12,6 +12,8 @@ def plot_floats(my_def_dict, ma=0, fname=None, title="Untitled", xlabel="Unlabel
 
     if isinstance(my_def_dict, defaultdict):
         my_dict = {k: sum(v)/ len(v) for k,v in my_def_dict.items()}
+    else:
+    	my_dict = my_def_dict
 
     x, y = zip(*sorted(my_dict.items()))
 
