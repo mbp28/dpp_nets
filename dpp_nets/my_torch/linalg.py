@@ -96,3 +96,15 @@ class custom_eig(Function):
         M = grad_e.diag() + F * (v.t().mm(grad_v))
         grad_matrix = v.mm(M).mm(v.t())
         return grad_matrix
+
+class custom_inverse(Function):
+    
+    def forward(self, A):
+        C = torch.inverse(A)
+        self.save_for_backward(C)
+        return C
+    
+    def backward(self, grad_C):
+        C, = self.saved_tensors
+        grad_A = -C.t().mm(grad_C).mm(C.t())
+        return grad_A

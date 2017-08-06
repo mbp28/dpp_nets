@@ -1,0 +1,19 @@
+\begin{thebibliography}{1}
+
+\bibitem{low-rank-fact}
+M.~{Gartrell}, U.~{Paquet}, and N.~{Koenigstein}.
+\newblock {Low-Rank Factorization of Determinantal Point Processes for
+  Recommendation}.
+\newblock {\em ArXiv e-prints}, February 2016.
+
+\bibitem{kulesza2012learning}
+Alex Kulesza.
+\newblock {\em Learning with Determinantal Point Processes}.
+\newblock PhD thesis, University of Pennsylvania, 2012.
+
+\bibitem{DBLP:journals/corr/MnihR16}
+Andriy Mnih and Danilo~Jimenez Rezende.
+\newblock Variational inference for monte carlo objectives.
+\newblock {\em CoRR}, abs/1602.06725, 2016.
+
+\end{thebibliography}
