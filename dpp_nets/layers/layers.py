@@ -624,8 +624,7 @@ class ReinforceTrainer(nn.Module):
         for actions, rewards in zip(self.saved_subsets, self.saved_baselines):
             for action, reward in zip(actions, rewards):
                 action.reinforce(reward)
-
-
+                
         return loss
 
 ## Kernel Network
