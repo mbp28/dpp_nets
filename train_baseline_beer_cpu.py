@@ -15,10 +15,18 @@ parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', '
                     help='what is the target?', required=True)
 parser.add_argument('--remote', type=int,
                     help='training locally or on cluster?', required=True)
+
 parser.add_argument('--data_path_local', type=str, default='/Users/Max/data/beer_reviews',
                     help='where is the data folder locally?')
 parser.add_argument('--data_path_remote', type=str, default='/cluster/home/paulusm/data',
                     help='where is the data folder?')
+
+parser.add_argument('--ckp_path_local', type=str, default='/Users/Max/checkpoints/beer_reviews',
+                    help='where is the data folder locally?')
+
+parser.add_argument('--ckp_path_remote', type=str, default='/cluster/home/paulusm/checkpoints',
+                    help='where is the data folder?')
+
 parser.add_argument('-b', '--batch-size', default=50, type=int,
                     metavar='N', help='mini-batch size (default: 50)')
 parser.add_argument('--epochs', default=30, type=int, metavar='N',
@@ -159,9 +167,10 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     """
     State is a dictionary that cotains valuable information to be saved.
     """
-    torch.save(state, filename)
+    destination = os.path.join(,filename)
+    torch.save(state, destination)
     if is_best:
-        shutil.copyfile(filename, 'model_best.pth.tar')
+        shutil.copyfile(destination, 'model_best.pth.tar')
 
 if __name__ == '__main__':
     main()
