@@ -1,7 +1,7 @@
 def main():
-	print("Executing.")
-	log('It worked here.')
-	print("Executed.")
+    print("Executing.")
+    log('It worked here.')
+    print("Executed.")
 
 def log(msg):
     
