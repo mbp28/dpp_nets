@@ -9,7 +9,7 @@ def log(msg):
     path = '/cluster/home/paulusm/data/beer_reviews/test_file.txt'
 
     with open(path, 'a') as log:
-        log.write(msg + '\n')
+        log.write(msg)
 
 if __name__ == '__main__':
     main()
