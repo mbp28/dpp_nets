@@ -18,13 +18,13 @@ parser.add_argument('--remote', type=int,
 
 parser.add_argument('--data_path_local', type=str, default='/Users/Max/data/beer_reviews',
                     help='where is the data folder locally?')
-parser.add_argument('--data_path_remote', type=str, default='/cluster/home/paulusm/data',
+parser.add_argument('--data_path_remote', type=str, default='/cluster/home/paulusm/data/beer_reviews',
                     help='where is the data folder?')
 
 parser.add_argument('--ckp_path_local', type=str, default='/Users/Max/checkpoints/beer_reviews',
                     help='where is the data folder locally?')
 
-parser.add_argument('--ckp_path_remote', type=str, default='/cluster/home/paulusm/checkpoints',
+parser.add_argument('--ckp_path_remote', type=str, default='/cluster/home/paulusm/checkpoints/beer_reviews',
                     help='where is the data folder?')
 
 parser.add_argument('-b', '--batch-size', default=50, type=int,
