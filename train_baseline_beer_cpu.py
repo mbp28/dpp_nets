@@ -100,9 +100,9 @@ def main():
 
         adjust_learning_rate(optimizer, epoch)
 
-        #train(val_loader, model, criterion, optimizer, args.aspect)
+        train(val_loader, model, criterion, optimizer, args.aspect)
         
-        #loss = validate(val_loader, model, criterion, args.aspect)
+        loss = validate(val_loader, model, criterion, args.aspect)
         loss = 21
 
         log(epoch, loss)
@@ -155,7 +155,12 @@ def validate(loader, model, criterion, aspect):
 def log(epoch, loss):
     string = str.join(" | ", ['Epoch: %d' % (epoch), 'Validation Loss: %.5f' % (loss)])
 
-    with open('DeepSetBaseline_log.txt', 'a') as log:
+    if args.remote:
+        destination = os.path.join(args.ckp_path_remote, 'DeepSetBaseline_log.txt')
+    else:
+        destination = os.path.join(args.ckp_path_local, 'DeepSetBaseline_log.txt')
+
+    with open(destination, 'a') as log:
         log.write(string + '\n')
 
 def adjust_learning_rate(optimizer, epoch):
