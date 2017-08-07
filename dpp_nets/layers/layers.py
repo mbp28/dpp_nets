@@ -615,10 +615,14 @@ class ReinforceTrainer(nn.Module):
             loss = pred_loss
 
         # add computation of baselines and registering reawards here!!
-        losses = (pred - target).pow(2).view(batch_size, alpha_iter, target_dim).mean(2)
+        losses = (self.pred - target).pow(2).view(batch_size, alpha_iter, target_dim).mean(2)
 
         self.saved_losses = [[i.data[0] for i in row] for row in losses]
-        self.saved_baselines = [compute_baseline(i) for i in self.saved_losses]
+        if self.alpha_iter > 1:
+            self.saved_baselines = [compute_baseline(i) for i in self.saved_losses]
+        else:
+            self.saved_baselines = self.saved_losses
+
         self.saved_subsets = self.sampler.saved_subsets
 
         for actions, rewards in zip(self.saved_subsets, self.saved_baselines):
@@ -668,5 +672,13 @@ class ReinforceTrainer(nn.Module):
 
 # So far,
 # got reinforce trainer and marginal trainer and can plug-and-play
-# need to do custom_decomp now to test gradients.!!
+# need to do custom_decomp now to test gradients.!! Do later!
+# Write ready-script for training and validation of
+# a) baseline
+# b) DPP marginal trainer
+# c) REINFORCE trainer
+# --> think about which settings to change - regularization_mean + lr probably
+# submit to EULER and start installing directory on LAS group. 
+
+
 

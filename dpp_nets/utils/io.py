@@ -49,7 +49,7 @@ def make_embd(embd_path, only_index_dict=False, save_path=None):
     
     embd = torch.zeros(1 + vocab_size, embd_dim)
     for i, vec in enumerate(ix_to_vecs.values(), 1): 
-        embd[i] = vec
+        embd[i] = torch.FloatTensor(vec)
 
     embd_weight_dict = OrderedDict([('weight', embd)])
 
@@ -60,7 +60,7 @@ def make_embd(embd_path, only_index_dict=False, save_path=None):
         embd_layer = nn.Embedding(1 + vocab_size, embd_dim, padding_idx=0)
         embd_layer.load_state_dict(embd_weight_dict)
         embd_layer.weight.requires_grad = False
-        return embd_layer
+        return embd_layer, word_to_ix  
 
 def load_embd(embd_dict_path):
     
@@ -92,6 +92,7 @@ def make_tensor_dataset(data_path, word_to_ix, max_set_size=0, save_path=None):
     reviews = torch.stack(reviews)
     targets = torch.stack(targets)
 
+    dataset = TensorDataset(reviews, targets)
 
     if save_path:
         torch.save(dataset, save_path)    
