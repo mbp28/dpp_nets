@@ -158,9 +158,9 @@ def log(epoch, loss):
     string = str.join(" | ", ['Epoch: %d' % (epoch), 'Validation Loss: %.5f' % (loss)])
 
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, 'DeepSetBaseline_log.txt')
+        destination = os.path.join(args.ckp_path_remote, args.aspect + 'DeepSetBaseline_log.txt')
     else:
-        destination = os.path.join(args.ckp_path_local, 'DeepSetBaseline_log.txt')
+        destination = os.path.join(args.ckp_path_local, args.aspect + 'DeepSetBaseline_log.txt')
 
     with open(destination, 'a') as log:
         log.write(string + '\n')
@@ -183,9 +183,9 @@ def save_checkpoint(state, is_best, filename='baseline_checkpoint.pth.tar'):
     torch.save(state, destination)
     if is_best:
         if args.remote:
-            best_destination = os.path.join(args.ckp_path_remote, 'baseline_model_best.pth.tar')
+            best_destination = os.path.join(args.ckp_path_remote, args.aspect + 'baseline_model_best.pth.tar')
         else:
-            best_destination = os.path.join(args.ckp_path_local, 'baseline_model_best.pth.tar')
+            best_destination = os.path.join(args.ckp_path_local, args.aspect + 'baseline_model_best.pth.tar')
         
         shutil.copyfile(destination, best_destination)
 
