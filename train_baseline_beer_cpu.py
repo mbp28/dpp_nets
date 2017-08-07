@@ -102,8 +102,7 @@ def main():
 
         # train(train_loader, model, criterion, optimizer, args.aspect)
         
-        #loss = validate(val_loader, model, criterion, args.aspect)
-        loss = 219
+        loss = validate(val_loader, model, criterion, args.aspect)
 
         log(epoch, loss)
 
