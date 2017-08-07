@@ -100,9 +100,9 @@ def main():
 
         adjust_learning_rate(optimizer, epoch)
 
-        train(val_loader, model, criterion, optimizer, args.aspect)
+        #train(val_loader, model, criterion, optimizer, args.aspect)
         
-        loss = validate(val_loader, model, criterion, args.aspect)
+        #loss = validate(val_loader, model, criterion, args.aspect)
         loss = 21
 
         log(epoch, loss)
@@ -116,6 +116,8 @@ def main():
                 'optimizer': optimizer.state_dict()} 
 
         save_checkpoint(save, is_best)
+
+    print('*'*20, 'SUCCESS','*'*20)
 
 
 def train(loader, model, criterion, optimizer, aspect):
