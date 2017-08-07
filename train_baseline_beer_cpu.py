@@ -51,13 +51,13 @@ def main():
 
     ### Load data
     if args.remote:
-        print('training remotely')
+        # print('training remotely')
         train_path = os.path.join(args.data_path_remote, str.join(".",['reviews', args.aspect, 'train.txt.gz']))
         val_path   = os.path.join(args.data_path_remote, str.join(".",['reviews', args.aspect, 'heldout.txt.gz']))
         embd_path = os.path.join(args.data_path_remote, 'review+wiki.filtered.200.txt.gz')
 
     else:
-        print('training locally')
+        # print('training locally')
         train_path = os.path.join(args.data_path_local, str.join(".",['reviews', args.aspect, 'train.txt.gz']))
         val_path   = os.path.join(args.data_path_local, str.join(".",['reviews', args.aspect, 'heldout.txt.gz']))
         embd_path = os.path.join(args.data_path_local, 'review+wiki.filtered.200.txt.gz')
@@ -65,7 +65,11 @@ def main():
     embd, word_to_ix = make_embd(embd_path)
     train_set = make_tensor_dataset(train_path, word_to_ix)
     val_set = make_tensor_dataset(val_path, word_to_ix)
-    print("loaded data")
+    # print("loaded data")
+
+    epoch = 1
+    loss = 1
+    log(epoch, loss)
 
     torch.manual_seed(0)
     train_loader = DataLoader(train_set, args.batch_size, shuffle=True)
