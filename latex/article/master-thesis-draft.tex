@@ -1,0 +1,183 @@
+\documentclass[12pt, oneside]{article}   	% use "amsart" instead of "article" for AMSLaTeX format
+\usepackage{geometry}                		% See geometry.pdf to learn the layout options. There are lots.
+\geometry{letterpaper}                   		% ... or a4paper or a5paper or ... 
+%\geometry{landscape}                		% Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}    		% Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}				% Use pdf, png, jpg, or eps§ with pdflatex; use eps in DVI mode
+								% TeX will automatically convert eps --> pdf in pdflatex		
+\usepackage{amssymb, amsmath}
+\usepackage{mathtools}
+\DeclareMathOperator{\tr}{tr}
+
+\title{DPP-Nets (Draft)}
+\author{Max Paulus}
+%\date{}							% Activate to display a given date or no date
+
+
+
+\newcommand{\E}{\mathrm{E}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\Cov}{\mathrm{Cov}}
+
+\begin{document}
+\maketitle
+%\section*{}
+\subsection*{Setting}
+Consider a training instance $(\textbf{x},\textbf{y})$, where $\textbf{x} = \{x_t\}^l_{t=1}$ is a ground set of size $l$ (e.g. an input text sequence) and $y \in [0,1]^m$ is an $m$-dimensional target vector (e.g. a sentiment vector). We define a DPP over the input text with $l$-by-$l$ kernel matrix $\textbf{L} = \textbf{V}\textbf{V}^\top$, \footnote{Remember any PSD matrix is the Gramian matrix of a set of vectors} where row $\textbf{v}_i$ of $\textbf{V}$ corresponds to $x_i$ of $\{x_t\}^l_{t=1}$. The DPP should assign high probability to small subsets of words $\textbf{x}^*=\{x_t\}_{t \in A}$ (where $A$ is a small set of indices), such that predictions $\hat{y} = g(\textbf{x}^*, \phi)$ made based only on $\textbf{x}^*$ are relatively good. 
+Our goal is to learn the parameters $\phi$ for prediction and more difficultly a good kernel matrix for the DPP, i.e. a mapping from each ground set to a kernel matrix $\textbf{L} = \textbf{V}\textbf{V}^\top$. For this purpose, we consider a mapping $\textbf{v}_i = f(x_i, \theta)$ (e.g. a neural network), whose parameters $\theta$ we attempt to learn.\footnote{This imposes an implicit constraint on the kernel matrix $L$. Namely, for two words $x_i$ and $x_j$ appearing both in two different grounds sets $\textbf{x}_1$ and $\textbf{x}_2$, the probability assigned to the subset $\{x_i,x_j\}$ by the DPP corresponding to  $\textbf{x}_1$ will be proportional to the probability assigned to the same subset by the DPP corresponding to $\textbf{x}_2$. This is a modest constraint however, which facilitates learning across grounds sets of different size and composition. The assumption would be relaxed by a direct mapping from ground set to the square root (Cholesky decomposition) of the corresponding kernel matrix $\textbf{V} = f(\textbf{x}, \theta)$} Importantly, we do not observe good subsets $\textbf{x}^*$ and must learn $\theta$ without supervision. 
+
+\subsection*{Learning}
+We may learn the parameters $\phi$ and $\theta$ by stochastic gradient descent. Let $C(y, \hat{y})$ be a cost function. Since our prediction pipeline involves a stochastic component (namely which subset $\textbf{x}^*$ is sampled and used for prediction), we minimise the expected cost with respect to the parameters $\theta$ and $\phi$. For a single training instance $(\textbf{x},\textbf{y})$, this is 
+\begin{equation}
+\min_{\theta, \phi}  \mathop{\mathbb{E}}_{\textbf{x}^* \sim L_{\theta,\textbf{x}}}[C(y, g(\textbf{x}^*, \phi))]
+\end{equation}
+%
+The gradient with respect to $\phi$ is thus given by: 
+\begin{equation}
+\frac{\partial}{\partial \phi} \mathop{\mathbb{E}}_{\textbf{x}^* \sim L_{\theta,\textbf{x}}}
+	[C(y, g(\textbf{x}^*, \phi))] 	
+	= \mathop{\mathbb{E}}_{\textbf{x}^* \sim L_{\theta,\textbf{x}}}
+	[\frac{\partial C}{\partial g(\textbf{x}^*,\phi)}\frac{\partial g(\textbf{x}^*,\phi)}{\partial \phi}
+	]
+\end{equation}
+%
+The gradient with respect to $\theta$ is slightly more complicated and given by:
+\begin{equation}
+\frac{\partial}{\partial \theta} \mathop{\mathbb{E}}_{\textbf{x}^* \sim L_{\theta,\textbf{x}}}
+	[C(y, g(\textbf{x}^*, \phi))] 	
+	= \mathop{\mathbb{E}}_{\textbf{x}^* \sim L_{\theta,\textbf{x}}}
+	[C(y, g(\textbf{x}^*, \phi)) 
+	\frac{\partial}{\partial \theta}(\log(\det(L_{[\textbf{x}^*]}))-\log(\det(L+I)))
+	]
+\end{equation}
+where
+\begin{equation}
+\frac{\partial}{\partial \theta}\log(\det(L_{[\textbf{x}^*]})) = \sum_{i \in |\textbf{x}^*|}\sum_{j} 
+	\frac{\partial \log(\det(L_{[\textbf{x}^*]}))}{\partial v_{ij}} \frac{\partial v_{ij}}{\partial \theta}
+\end{equation}
+\begin{equation}
+\label{low-fact-1}
+	\frac{\partial \log(\det(L_{[\textbf{x}^*]}))}{\partial v_{ij}} = \mathrm{tr}\left(L_{[\textbf{x}^*]}^{-1}
+	\frac{\partial L_{[\textbf{x}^*]}}{\partial v_{ij}}\right)
+\end{equation}
+and 
+\begin{equation}
+\frac{\partial}{\partial \theta}\log(\det(L+I)) = \sum_{i}\sum_{j} 
+	\frac{\partial \log(\det(L+I))}{\partial v_{ij}} \frac{\partial v_{ij}}{\partial \theta}
+\end{equation}
+\begin{equation}
+\label{low-fact-2}
+	\frac{\partial \log(\det(L +I))}{\partial v_{ij}} = \mathrm{tr}\left(L^{-1}
+	\frac{\partial (L+I)}{\partial v_{ij}}\right)
+\end{equation}
+When $v_i$ are low-dimensional vectors, then (\ref{low-fact-1}) and (\ref{low-fact-2}) can be calculated efficiently, because the matrix inversion of a low-dimensional matrix is feasible. \cite{low-rank-fact}. This then gives: 
+\begin{equation}
+	\mathrm{tr}\left(L_{[\textbf{x}^*]}^{-1}\frac{\partial L_{[\textbf{x}^*]}}{\partial v_{ij}}\right)
+	= \left(L^{-1}_{[\textbf{x}^*]\right)_{i, \bullet}^\top \left(V_{[\textbf{x}^*]}\right)_{\bullet,j}
+	+ \sum_{r}^{}\left(L^{-1}_{[\textbf{x}^*]\right)_{r,i}v_{rj}
+\end{equation}
+
+and 
+\begin{equation}
+	\mathrm{tr}\left(L^{-1}\frac{\partial (L+I)}{\partial v_{ij}}\right) 
+	= \left(I - V(I+V^\top V)^{-1}V^\top_\right)_{i, \bullet}^\top \left(V_{}\right)_{\bullet,j}
+	+ \sum_{r}^{}\left(I - V(I+V^\top V)^{-1}V^\top_\right)_{r,i}v_{rj}
+\end{equation}
+As is well-known in the reinforcement learning literature, the stochastic gradient with respect to $\theta$ may have large variance. The reason is that we are optimising the sampling procedure by drawing (noisy) samples from the current distribution and only evaluate their associated cost and the score function for them, but don't know how the expected cost will change when another (unobserved) sample is made more likely. 
+
+\subsubsection*{Control Variates}
+A common estimation strategy to combat the high variance of the stochastic gradient is to employ a control variate. Generally, when estimating $m = \mathop{\mathbb{E}}Y$ from noisy samples of $Y = h(X)$,  a good control variate $Z$ is a variable that is correlated with $Y$, has low variance and whose expectation can be computed. $Z$ then reveals some information about whether the simple sample average of $h(Y)$ is likely to over- or underestimate $m$ and gives rise to a correction, which may reduce the variance substantially. Specifically, 
+\begin{equation}
+\hat{m} = \frac{\Sigma_{i=1}^{n}Y_i-c^*(Z_i-\E(Z))}{n}
+\end{equation}
+\begin{equation}
+c^* = \frac{\Cov(Y,Z)}{\Var(Z)}
+\end{equation}
+and $c^*$ may be estimated empirically. 
+\\
+\\
+In the setting of unsupervised learning of a DPP, this amounts to finding a variable $Z$ that is correlated with $Y=C(y, g(\textbf{x}^*, \phi))\frac{\partial}{\partial \theta}(\log(\det(L_{[\textbf{x}^*]}))-\log(\det(L+I)))$ and whose expectation can be evaluated. An obvious choice is to use the score function itself, i.e. 
+\begin{equation}
+Z = \frac{\partial}{\partial \theta}(\log(\det(L_{[\textbf{x}^*]}))-\log(\det(L+I)))
+\end{equation}
+When the score is used for $Z$, $c^*$ is known as the baseline. This approach is used in a different thread of research for variational inference. \cite{blackboxvar} It is further adapted in \cite{DBLP:journals/corr/MnihG14}, where $c^*$ is implemented as a neural network that takes $\textbf{x}$ as an input, i.e. they use an input-dependent baseline. This seems particularly important, in the variational inference setting, where the learning signal is a log-ratio of probability densities, and thus may take very different values for very common or very uncommon $\textbf{x}$. The use here seems somewhat limited to the case of observing somewhat unusual combinations of $\textbf{x}$ and $\textbf{y}$ and learning to reweight their influence on the gradient signal.  
+
+\textbf{Next Step:} Code an implementation on the beer recommendations with simple score function control variate. Explore other possible control variates. 
+
+\subsubsection*{Talk about}
+\begin{itemize}
+\item talk about write-up; i.e. present; talk about things that may appear unclear to supervisor
+\begin{itemize}
+\item presentation is independent of rank of V, paper uses between 15-76 dimension; we're probs looking at dim $< 300$, seems reasonable
+\item talk about the subtlety with the DPP mapping, implicit constraint, good parameterization?
+\item 
+\end{itemize}
+\item talk about coding implementation
+\begin{itemize}
+\item will use beer recommendation set, will use same cost function for now, will start coding this week.
+\end{itemize}
+\item talk about more structured search for control variates 
+\begin{itemize}
+\item Areas of DPP literature that may be useful (approximations/ for matrice properties, i.e. trace/ determinants, but how is this helpful? Always needs to be a random quantity; it should rather be something from statistics, that is related to the score function and can be efficiently computed for DPPS, i.e. using properties of matrices
+\end{itemize}
+\end{itemize}
+
+\subsubsection*{Control Variates - Guided Search}
+\begin{itemize}
+\item An input-dependent baseline may depend on both $\textbf{y}$ and $\textbf{x}$
+\item check applicability of muprop or rebar and other ideas of that stochastic neuron setting. 
+\item search for random quantities beyond the score. 
+\end{itemize}
+
+%Our goal thus to learn the parameters $\textbf{v}_i$ for each word (i.e. any word in the training or test set), or more specifically to learn the parameters $\theta$ of a mapping (e.g. neural network) from each word $x_i$ to $\textbf{v}_i = f(x_i, \theta)$. Importantly, we do not observe 
+
+\subsection*{Findings}
+\begin{itemize}
+\item Right upon initialization: The DPP does pretty well, returns most of the items most of the time. This is because average subset size is high, but also because orthogonality is roughly preserved. (Hence, interesting to check with non-orthogonal input once the other thing is working). The embedding also looks roughly as it looked after training as a result. But we want sharper edges in the DPP (train longer?) It also suggests that most of the convergence comes from training the predictor whose initial predictions are really bad. 
+\item Suprisingly difficult to train the predictor on the entire bag of words. Very surprisingly.
+\item 
+\end{itemize}
+
+
+\subsection*{Determinantal Point Processes}
+
+A discrete point process $\mathcal{P}$ on a ground set $\mathcal{Y}$ of cardinality $N$ is a probability measure on its power set $2^{\mathcal{Y}}$. Hence, a random sample from $\mathcal{P}$ might be any proper or improper subset of $\mathcal{Y}$. Let $\textbf{Y}$ be such a random sample. Then, $\mathcal{P}$  is called a \textit{determinantal point process}, if we have for every $A \subseteq \mathcal{Y}$, 
+\begin{equation}
+\mathcal{P}( A \subseteq \textbf{Y}) = \det(K_{A})
+\end{equation}
+for some real, symmetric $N\times N$ matrix $K$, which is known as the marginal kernel. By $K_{A}$, we denote the sub-matrix $[K_{ij}]_{i,j \in A}$, which restricts $K$ to the entries indexed by elements in $A$. For $\mathcal{P}$ to be a valid probability measure, we define $\det(K_{\emptyset}) = 1$ and require all eigenvalues of $K$ to be bounded between $0$ and $1$. For this reason, most practical applications restrict the class of DPPs to \textit{L-ensembles} \cite{Lensemble}. Through the choice of any positive semi-definite matrix, they directly specify the probability associated with  each subset of $\mathcal{Y}$ as
+\begin{equation}
+\mathcal{P}(\textbf{Y} = Y) = \frac{\det(L_{Y})}{\det(L + I)}
+\end{equation}
+This identifies $\mathcal{P}$  as a valid probability measure, because $\Sigma_{Y \subseteq \mathcal(Y)} \det(L_{Y}) = \det(L + I)$ \cite{kulesza2012learning}. An \textit{L-ensemble} defined by $L$ gives rise to a DPP with marginal kernel 
+\begin{equation}
+K = L(L+I)^{-1} = I - (L + I)^{-1}
+\end{equation}
+
+\subsection*{Regularization}
+Denote by $|\textbf{Y}|$ the cardinality of a random subset drawn from a DPP. It is easily seen that $\mathbb{E}[|\textbf{Y}|]$ is given by the sum of the marginal probabilities of the singletons of $\mathcal{Y}$ and hence, 
+\begin{equation}
+\mathbb{E}[|\textbf{Y}|] = \tr(K)
+\end{equation}
+When we parameterise a DPP through $L = EE^{\top}$, we can re-write this expression using the singular value decomposition of $E = USV^{\top}$, 
+\begin{align*}
+  \mathbb{E}[|\textbf{Y}|] 
+  &= \tr(L(L+I)^{-1})
+  \\ &= \tr(US^{2}U^{\top}(US^{2}U^{\top}+I)^{-1})
+  \\ &= \tr(US^{2}U^{\top}(U(S^{2} + I)^{-1}U^{\top}))
+  \\ &= \tr(US^{2}(S^{2} + I)^{-1}U^{\top})
+  \\ &= \tr(S^{2}(S^{2} + I)^{-1})
+  \\ &= \sum_{i = 1}^{N}\frac{s_{i}^{2}}{s_{i}^{2} + 1}
+  \end{align*}
+This allows us to directly regularise the 
+
+
+
+
+\bibliography{../bib/master-bib.bib}{}
+\bibliographystyle{plain}
+
+
+
+
+\end{document}  

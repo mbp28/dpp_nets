@@ -1,24 +1,14 @@
 import torch
 import torch.nn as nn
 from torch.autograd import Function
+from torch.autograd import StochasticFunction
 from torch.autograd import Variable
 
 import dpp_nets.dpp as dpp
+from dpp_nets.my_torch.utilities import omit_slice
+from dpp_nets.my_torch.utilities import orthogonalize
 
-def delete_col(matrix, col_ix):
-    
-    if col_ix == 0:
-        return matrix[:,1:]
-    
-    if (col_ix + 1) == matrix.size(1):
-        return matrix[:,:col_ix]
-    else:
-        chunk1 = matrix[:, :col_ix]
-        chunk2 = matrix[:, (col_ix + 1):]
-        new_mat = torch.cat([chunk1, chunk2], dim=1)
-        return new_mat
-
-class DPP(Function):
+class DPP_Numpy(Function):
     """
     Uses Numpy Functions to sample from the DPP implicitly 
     defined through embd, returns score as a gradient in the
@@ -58,7 +48,7 @@ class DPP(Function):
 
         return score
 
-class DPPLayer(nn.Module):
+class DPPLayer_Numpy(nn.Module):
     """
     Uses Numpy Functions to sample from the DPP implicitly 
     defined through embd, returns score as a gradient in the
@@ -71,66 +61,231 @@ class DPPLayer(nn.Module):
     dtype = torch.DoubleTensor
     """
     def __init__(self, dtype):
-        super(DPPLayer, self).__init__()
+        super(DPPLayer_Numpy, self).__init__()
         self.dtype = dtype
 
     def forward(self, embd):
-        return DPP(self.dtype)(embd)
+        return DPP_Numpy(self.dtype)(embd)
 
-class toy_DPP(Function):
-    """
-    Uses Numpy Functions to sample from the DPP implicitly 
-    defined through embd, returns score as a gradient in the
-    backward computation (needs to be complemented by hooks
-    for REINFORCE or control variate training)
 
-    Arguments:
-    Depending on whether you're training Double or Float, provide
-    dtype = torch.FloatTensor
-    dtype = torch.DoubleTensor
-    """
-    def __init__(self, dtype):
-        self.dtype = dtype
-
+class DPP(StochasticFunction):
+    
     def forward(self, vals, vecs):
-        """
-        Given L = E * E.t() and E = u * s * v.t()
-        vals are the eigenvalues of L, respectively s**2
-        vecs are the eigenvectors of L, respectively u
-        """
 
-        # Transform to numpy
-        e = vals.numpy()
-        v = vecs.numpy()
+        # Sometimes orthogonalization fails (i.e. deletes vectors)
+        # In that case just retry!
+        self.dtype = vals.type()
 
-        # Sample subset from the DPP
-        subset = torch.from_numpy(dpp.sample_dpp(e, v, one_hot=True))
-        subset = subset.type(self.dtype)
+        while True:
+            try:
+                # Set-up
+                n = vecs.size(0)
+                n_vals = vals.size(0)
 
-        # Save tensors for backward (gradient computation)
-        self.save_for_backward(vals, vecs, subset)
+                # Sample a set size
+                index = (vals / (vals + 1)).bernoulli().byte()
+                k = torch.sum(index)
 
-        return subset
+                # Check for empty set
+                if not k:
+                    subset = vals.new().resize_(n).copy_(torch.zeros(n))
+                    self.save_for_backward(vals, vecs, subset) 
+                    return subset
+                
+                # Check for full set
+                if k == n:
+                    subset =  vals.new().resize_(n).copy_(torch.ones(n))
+                    self.save_for_backward(vals, vecs, subset) 
+                    return subset
+
+                # Sample a subset
+                V = vecs[index.expand_as(vecs)].view(n, -1)
+                subset = vals.new().resize_(n).copy_(torch.zeros(n))
+                
+                while subset.sum() < k:
+
+                    # Sample an item
+                    probs = V.pow(2).sum(1).t()
+                    item = probs.multinomial(1)[0,0]
+                    subset[item] = 1
+                    
+                    # CHeck if we got k items now
+                    if subset.sum() == k:
+                        break
+
+                    # Choose eigenvector to eliminate
+                    j = V[item, ].abs().sign().unsqueeze(1).t().multinomial(1)[0,0]
+                    Vj = V[:, j]
+                    
+                    # Update vector basis
+                    V = omit_slice(V,1,j)
+                    V.sub_(Vj.ger(V[item, :] / Vj[item]))
+
+                    # Orthogonalize vector basis
+                    V, _ = torch.qr(V)
+                    
+                self.save_for_backward(vals, vecs, subset) 
+
+                return subset
+            except RuntimeError:
+                print("RuntimeError")
+                continue
+                
+            break
         
-    def backward(self, grad_output):
-        vals, vecs, subset = self.saved_tensors
-        n_selected = int(subset.sum())
+    def backward(self, reward):
+        #TODO: Need to check this!
+        # Checked it! Looks good.
 
-        # from full matrix
-        from_full = 1 / vals
+        # Set-up
+        if False:
+            vals, vecs, subset = self.saved_tensors#
+            dtype = self.dtype
+            n = vecs.size(0)
+            n_vals = vals.size(0)
+            subset_sum = subset.long().sum()
 
-        # from subset
-        P = torch.diag(subset)
-        P = P[subset.expand_as(P).t().byte()].view(n_selected, -1)
+            # auxillary
+            matrix = vecs.mm(vals.diag()).mm(vecs.t())
+            P = torch.eye(n).masked_select(subset.expand(n,n).t().byte()).view(subset_sum, -1).type(dtype)
+            submatrix = P.mm(matrix).mm(P.t())
+            subinv = torch.inverse(submatrix)
+            Pvecs = P.mm(vecs)
+        
+            # gradiens
+            grad_vals = 1 / vals
+            grad_vals += Pvecs.t().mm(subinv).mm(Pvecs).diag()
+            grad_vecs = P.t().mm(subinv).mm(Pvecs).mm(vals.diag())
 
-        submat = P.mm(vecs).mm(vals.diag()).mm(vecs.t()).mm(P.t())
-        submat_inv = submat.inverse()
-        med = P.t().mm(submat_inv).mm(P).mm(vecs)
+            grad_vals.mul_(reward)
+            grad_vecs.mul_(reward)
 
-        grad_vals = self.dtype(vecs.t().mm(med).diag() + from_full)
-        grad_vecs = self.dtype(2 * med.mm(vals.diag()))
+            return grad_vals, grad_vecs
+
+        vals, vecs, subset = self.saved_tensors#
+        dtype = self.dtype
+        n = vecs.size(0)
+        n_vals = vals.size(0)
+        subset_sum = subset.long().sum()
+
+        grad_vals = 1 / vals
+        grad_vecs = torch.zeros(n, n_vals).type(dtype)
+
+        if subset_sum:
+            # auxillary
+            matrix = vecs.mm(vals.diag()).mm(vecs.t())
+            P = torch.eye(n).masked_select(subset.expand(n,n).t().byte()).view(subset_sum, -1).type(dtype)
+            submatrix = P.mm(matrix).mm(P.t())
+            subinv = torch.inverse(submatrix)
+            Pvecs = P.mm(vecs)
+
+            grad_vals += Pvecs.t().mm(subinv).mm(Pvecs).diag()
+            grad_vecs += P.t().mm(subinv).mm(Pvecs).mm(vals.diag())    
+
+        grad_vals.mul_(reward)
+        grad_vecs.mul_(reward)
 
         return grad_vals, grad_vecs
 
+class AllInOne(StochasticFunction):
+    
+    def forward(self, kernel):
+        self.dtype = kernel.type()
 
+        vecs, vals, _ = torch.svd(kernel)
+        vals.pow_(2)
+
+        # Sometimes orthogonalization fails (i.e. deletes vectors)
+        # In that case just retry!
+        while True:
+            try:
+                # Set-up
+                n = vecs.size(0)
+                n_vals = vals.size(0)
+
+                # Sample a set size
+                index = (vals / (vals + 1)).bernoulli().byte()
+                k = torch.sum(index)
+
+                # Check for empty set
+                if not k:
+                    subset = vals.new().resize_(n).copy_(torch.zeros(n))
+                    self.save_for_backward(kernel, subset) 
+                    return subset
+                
+                # Check for full set
+                if k == n:
+                    subset =  vals.new().resize_(n).copy_(torch.ones(n))
+                    self.save_for_backward(kernel, subset) 
+                    return subset
+
+                # Sample a subset
+                V = vecs[index.expand_as(vecs)].view(n, -1)
+                subset = vals.new().resize_(n).copy_(torch.zeros(n))
+                
+                while subset.sum() < k:
+
+                    # Sample an item
+                    probs = V.pow(2).sum(1).t()
+                    item = probs.multinomial(1)[0,0]
+                    subset[item] = 1
+                    
+                    # CHeck if we got k items now
+                    if subset.sum() == k:
+                        break
+
+                    # Choose eigenvector to eliminate
+                    j = V[item, ].abs().sign().unsqueeze(1).t().multinomial(1)[0,0]
+                    Vj = V[:, j]
+                    
+                    # Update vector basis
+                    V = omit_slice(V,1,j)
+                    V.sub_(Vj.ger(V[item, :] / Vj[item]))
+
+                    # Orthogonalize vector basis
+                    V, _ = torch.qr(V)
+
+            except RuntimeError:
+                print("RuntimeError")
+                continue
+            break
+        
+        self.save_for_backward(kernel, subset)  
+        
+        return subset
+        
+    def backward(self, reward):
+        #TODO: Need to check this!
+        # Checked it! Looks good.
+
+        # Set-up
+        kernel, subset = self.saved_tensors
+        dtype = self.dtype
+
+        n, kernel_dim = kernel.size()
+        subset_sum = subset.long().sum()   
+        grad_kernel = torch.zeros(kernel.size()).type(dtype)
+
+        if subset_sum:
+            # auxillary
+            P = torch.eye(n).masked_select(subset.expand(n,n).t().byte()).view(subset_sum, -1).type(dtype)
+            subembd = P.mm(kernel)
+            submatrix = subembd.mm(subembd.t())
+            submatinv = torch.inverse(submatrix)
+            subgrad = 2 * submatinv.mm(subembd)
+            subgrad = P.t().mm(subgrad)
+            grad_kernel.add_(subgrad)
+        
+        # Gradient from whole L matrix
+        K = kernel.t().mm(kernel) # not L!
+        I_k = torch.eye(kernel_dim).type(dtype)
+        I = torch.eye(n).type(dtype)
+        inv = torch.inverse(I_k + K)
+        B = I - kernel.mm(inv).mm(kernel.t())
+        grad_from_full = 2 * B.mm(kernel)
+        grad_kernel.sub_(grad_from_full)
+
+        grad_kernel.mul_(reward)
+
+        return grad_kernel
 

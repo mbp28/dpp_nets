@@ -1,0 +1,194 @@
+% !TEX TS-program = pdflatex
+% !TeX encoding = UTF-8
+% !TeX spellcheck = en_GB
+
+\documentclass[aspectratio=43]{beamer}
+% use this instead for 16:9 aspect ratio:
+%\documentclass[aspectratio=169]{beamer}
+% supported acpect ratios  1610  169 149 54 43 (deault) 32
+%
+
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{pgfplots}
+\usepackage[english]{babel} 
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc} 	
+\usepackage[english]{babel}
+
+\usepackage{graphicx}
+\usepackage{subcaption}
+
+\usetheme{ETHbeamer}
+
+\colorlet{ETHcolor1}{ETHc}
+\colorlet{ETHcolor2}{ETHi}
+
+\setbeamertemplate{bibliography item}{}
+\newcommand{\overbar}[1]{\mkern 1.5mu\overline{\mkern-1.5mu#1\mkern-1.5mu}\mkern 1.5mu}
+\DeclareMathOperator{\Tr}{Tr}
+
+\author{Max Paulus}
+\title{Working Title}
+\subtitle{Working Title}
+\date{2017-08-02}
+
+% uncomment if you do not want to use a department logo
+%\deplogofalse
+
+
+\begin{document}
+
+\titleframe
+
+\begin{frame}
+\frametitle{Introduction I}
+Given a set input $X = \{X_i\}_{i=1}^{n}$ and an associated target  $Y \in \mathbb{R}^{d} $, jointly learn a determinantal point process $\mathbb{P}_L(\mathcal{A})$, where $\mathcal{A}$ indexes subsets of $X$  and a function $g: 2^{X} \rightarrow \mathbb{R}^{d}$ , such that $\hat{Y} = g(\mathcal{A})$ and $\textrm{cost} =  \textrm{cost}(Y, \hat{Y})$ is minimized. \newline
+\textbf{Architecture}
+\begin{itemize}
+\item Kernel Network: $L = VV^{\top}$, where $V_{i, \cdot} = f_{\theta}(X_i, \overbar{X})$ 
+\item Prediction Network: $\hat{Y} = g(\overbar{X}_{\mathcal{A}})$, where $\mathcal{A} \subseteq X$ 
+\item Sampling: Use SVD of V to compute eigenvalues and -vectors of $L$.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Gradient Derivation}
+Let $\theta$ parameterise the kernel network, such that $K = f_{\theta}(X)$ and let $L=KK^{\top}$ parameterise the DPP. The policy gradient  is given by: 
+\begin{equation}
+\nabla_{\theta}\mathbb{E}_{L}[\textrm{cost}] &= \mathbb{E}_{L}[\nabla_{\theta}\log(\mathbb{P(\mathcal{A)}})\times \textrm{cost}]  
+\end{equation}
+We need $\nabla_{V}\log(\mathbb{P(\mathcal{A)}})$ \cite{low-rank-fact}:
+\begin{align*}
+\nabla_{V}\log(\mathbb{P(\mathcal{A)}}) &= \nabla_{V}\log\det(L_{\mathcal{A}}) - \nabla_{V}\log\det(L + I) \\
+&= 2 \times {}^{}L_{\mathcal{A}}^{-1}K - 2 \times (I_{n} - K(I_{d} - + K^{\top}K)^{-1}K^{\top})\\
+\end{align*}
+\textbf{Why good?}
+\begin{itemize}
+\item{The dimension of $L_{\mathcal{A}}}$ and $(I_{d} - + K^{\top}K)^{-1})$ do not depend on ground set size, can be computed even for large sets.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Controlling the Variance}
+\newline
+VIMCO \cite{DBLP:journals/corr/MnihR16} is a \textbf{state-of-the-art leave-one-out control variate} for multi-sample MC objectives. Can also be (ab)used for additive decomposable loss function and provide high-quality baseline: 
+\begin{equation}
+\textrm{cost}(\mathcal{A}_{i}) \rightarrow \textrm{cost}(\mathcal{A}_{i}) - \frac{1}{n-1}\sum_{-i}\textrm{cost}(\mathcal{A}_{i})
+\end{equation}
+\newline
+\textbf{Why good?}
+\begin{itemize}
+\item Unbiased
+\item No extra parameters
+\item Credit assignment (preserved)
+\item Loss scaling
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Controlling Sparsity}
+\newline
+Given $L = KK^\top$ and $K = USV^\top$, $\mathbb{E}[\left\vert{\mathcal{A}}\right\vert]$ of a sampled subset $\mathcal{A}$ is \cite{kulesza2012learning}: 
+\begin{align*}
+\mathbb{E}[\left\vert{\mathcal{A}}\right\vert] &= \Tr(L(L+I)^{-1})  \\
+&= \sum_{i=1}^{n}\frac{S_{i}^{2}}{S_{i}^{2} + 1} \\
+\end{align*}
+\textbf{Why bother?} 
+\begin{itemize}
+\item{\textbf{Naive:} Regularise subset size of samples directly through REINFORCE}
+\item{\textbf{Using above:} Expectation is tractable; backpropagation through singular values, reduces variance and increases quality of learning signal for policy gradient.}
+\end{itemize}
+\clearpage
+\end{frame}
+
+\begin{frame}
+\frametitle{Learning a k-DPP - Set-Up}
+\begin{itemize}
+\item{\textbf{Task:} Given sets of size 40 with each member drawn from one of 10 clusters, learn a 10-DPP that always selects one and only one member from each cluster. Cluster means $\in \mathcal{Z}^{50}_{[-50, 50]}$} 
+\item{\textbf{Loss:} Use direct supervision on returned subset and a high-quality learning signal: $(\textrm{\#missed} + \textrm{\#oversampled})^{2}$}
+\item{\textbf{Network:} Uses only a 2-hidden layer kernel network with dimensions [100, 500, 500, 100]}
+\item{\textbf{Training:} Iterations: 10k, Batchsize: 10, Learning rate: $1^{-5}$}, Samples: 4, Optimizer: ADAM
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Learning a k-DPP - Results I}
+\begin{figure}[ht] 
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \includegraphics[width=0.9\linewidth]{plots/loss_kDPP.pdf} 
+    %\caption{Initial condition} 
+    \label{fig7:a} 
+    \vspace{0.1ex}
+  \end{subfigure}%% 
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \includegraphics[width=0.9\linewidth]{plots/ssize_kDPP.pdf} 
+    %\caption{Rupture} 
+    \label{fig7:b} 
+    \vspace{0.1ex}
+  \end{subfigure} 
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \includegraphics[width=0.9\linewidth]{plots/prec_kDPP.pdf} 
+    %\caption{DFT, Initial condition} 
+    \label{fig7:c} 
+  \end{subfigure}%%
+  \begin{subfigure}[b]{0.5\linewidth}
+    \centering
+    \includegraphics[width=0.9\linewidth]{plots/rec_kDPP.pdf} 
+    %\caption{DFT, rupture} 
+    \label{fig7:d} 
+  \end{subfigure} 
+  %\caption{Illustration of various images}
+  \label{fig7} 
+\end{figure}
+%The illustrations in figure~\ref{fig7}\ldots but in figure~\ref{fig7:d} you see\ldotss
+\end{frame}
+
+\begin{frame}
+\frametitle{Learning a k-DPP - Results II}
+\begin{table}[]
+\centering
+%\caption{Learning a k-DPP\footnote{10k iterations, lr: 1e-5, batchsize: 10, sampleiter: 4}}
+\label{my-label}
+\begin{tabular}{lll}
+                         & learnt DPP  & random benchmark \\
+Loss                 & 0.03   & 52.46            \\
+Clusters missed          & 0.08\% & 34.42\%          \\
+Clusters oversampled     & 0.21\% & 26.60\%          \\
+Mean(Subset Size)        & 10.01  & 10.06            \\
+Var(Subset Size)         & 0.03   & 7.52             \\
+Perfect Cluster returned & 97.2\% & 0.0\%           
+\end{tabular}
+\end{table}
+\end{frame}
+
+\begin{frame}
+\frametitle{Outlook}
+\textbf{Architecture}
+\begin{itemize}
+\item{Separate quality and diversity models in kernel network}
+\item{Explore successful application of Deep Set architecture}
+\end{itemize}
+\textbf{Training}
+\begin{itemize}
+\item{Alternative sampling distribution to increase exploration (marginals?)}
+\item{Could explore loss-scale invariant signal through suitable transformation}
+\item{Demonstrate superiority of control variate and regularization}
+\end{itemize}
+\textbf{Applications}
+\begin{itemize}
+\item{Multi-Sentiment Prediction?}
+\item{Similar Question Retrieval?}
+\item{Recommender Systems?}
+\item{...}
+\end{itemize}
+\end{frame}
+\begin{frame}
+\bibliography{../bib/master-bib.bib}{}
+\bibliographystyle{plain}
+\end{frame}
+
+\end{document}

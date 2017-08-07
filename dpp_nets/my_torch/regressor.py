@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
-from dpp_nets.my_torch.controlvar import compute_alpha
 from dpp_nets.my_torch.linalg import my_svd
 
 from collections import defaultdict
