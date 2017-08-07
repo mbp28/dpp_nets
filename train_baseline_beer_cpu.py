@@ -13,6 +13,12 @@ from dpp_nets.layers.layers import DeepSetBaseline
 parser = argparse.ArgumentParser(description='Baseline (Deep Sets) Trainer')
 parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all'],
                     help='what is the target?', required=True)
+parser.add_argument('--remote', type=int,
+                    help='training locally or on cluster?', required=True)
+parser.add_argument('--data_path_local', type=str, default='/Users/Max/data/beer_reviews',
+                    help='where is the data folder locally?')
+parser.add_argument('--data_path_remote', type=str, default='/cluster/home/paulusm/data',
+                    help='where is the data folder?')
 parser.add_argument('-b', '--batch-size', default=50, type=int,
                     metavar='N', help='mini-batch size (default: 50)')
 parser.add_argument('--epochs', default=30, type=int, metavar='N',
@@ -36,9 +42,17 @@ def main():
     lowest_loss = 100 # arbitrary high number as upper bound for loss
 
     ### Load data
-    train_path = os.path.join('data/', str.join(".",['reviews', args.aspect, 'train.txt.gz']))
-    val_path   = os.path.join('data/', str.join(".",['reviews', args.aspect, 'heldout.txt.gz']))
-    embd_path = 'data/review+wiki.filtered.200.txt.gz'
+    if args.remote:
+        print('training remotely')
+        train_path = os.path.join(args.data_path_remote, str.join(".",['reviews', args.aspect, 'train.txt.gz']))
+        val_path   = os.path.join(args.data_path_remote, str.join(".",['reviews', args.aspect, 'heldout.txt.gz']))
+        embd_path = os.path.join(args.data_path_remote, 'review+wiki.filtered.200.txt.gz')
+
+    else:
+        print('training locally')
+        train_path = os.path.join(args.data_path_local, str.join(".",['reviews', args.aspect, 'train.txt.gz']))
+        val_path   = os.path.join(args.data_path_local, str.join(".",['reviews', args.aspect, 'heldout.txt.gz']))
+        embd_path = os.path.join(args.data_path_local, 'review+wiki.filtered.200.txt.gz')
 
     embd, word_to_ix = make_embd(embd_path)
     train_set = make_tensor_dataset(train_path, word_to_ix)
@@ -132,7 +146,7 @@ def validate(loader, model, criterion, aspect):
 def log(epoch, loss):
     string = str.join(" | ", ['Epoch: %d' % (epoch), 'Validation Loss: %.5f' % (loss)])
 
-    with open('log.txt', 'a') as log:
+    with open('DeepSetBaseline_log.txt', 'a') as log:
         log.write(string + '\n')
 
 def adjust_learning_rate(optimizer, epoch):

@@ -10,3 +10,13 @@ Epoch: 5 | Validation Loss: 15.40999
 Epoch: 6 | Validation Loss: 15.40999
 Epoch: 7 | Validation Loss: 15.40999
 Epoch: 8 | Validation Loss: 15.40999
+Epoch: 0 | Validation Loss: 23.87161
+Epoch: 0 | Validation Loss: 23.87161
+Epoch: 1 | Validation Loss: 23.87161
+Epoch: 2 | Validation Loss: 23.87161
+Epoch: 3 | Validation Loss: 23.87161
+Epoch: 4 | Validation Loss: 23.87161
+Epoch: 5 | Validation Loss: 23.87161
+Epoch: 6 | Validation Loss: 23.87161
+Epoch: 7 | Validation Loss: 23.87161
+Epoch: 8 | Validation Loss: 23.87161
