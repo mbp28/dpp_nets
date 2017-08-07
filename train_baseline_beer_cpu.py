@@ -65,11 +65,7 @@ def main():
     embd, word_to_ix = make_embd(embd_path)
     train_set = make_tensor_dataset(train_path, word_to_ix)
     val_set = make_tensor_dataset(val_path, word_to_ix)
-    # print("loaded data")
-
-    epoch = 1
-    loss = 1
-    log(epoch, loss)
+    print("loaded data")
 
     torch.manual_seed(0)
     train_loader = DataLoader(train_set, args.batch_size, shuffle=True)
@@ -106,8 +102,7 @@ def main():
 
         #train(val_loader, model, criterion, optimizer, args.aspect)
         
-        #loss = validate(val_loader, model, criterion, args.aspect)
-        loss = 21
+        loss = validate(val_loader, model, criterion, args.aspect)
 
         log(epoch, loss)
 
