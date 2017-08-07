@@ -167,7 +167,11 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     """
     State is a dictionary that cotains valuable information to be saved.
     """
-    destination = os.path.join(,filename)
+    if args.remote:
+    	destination = os.path.join(ckp_path_remote,filename)
+    else:
+    	destination = os.path.join(ckp_path_remote,filename)
+    
     torch.save(state, destination)
     if is_best:
         shutil.copyfile(destination, 'model_best.pth.tar')
