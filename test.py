@@ -1,3 +1,5 @@
+import torch
+
 def main():
     print("Executing.")
     log('It worked here.')
