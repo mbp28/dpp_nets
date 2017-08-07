@@ -1,6 +1,8 @@
-print("Executing.")
-log('It worked here.')
-print("Executed.")
+def main():
+    print("Executing.")
+    log('It worked here.')
+    print("Executed.")
+
 
 def log(msg):
     msg = str(msg)
