@@ -69,7 +69,7 @@ def main():
 
     torch.manual_seed(0)
     train_loader = DataLoader(train_set, args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, args.batch_size, val_set.data_tensor.size(0))
+    val_loader = DataLoader(val_set, val_set.data_tensor.size(0))
     print("loader defined")
 
     ### Build model
@@ -100,10 +100,9 @@ def main():
 
         adjust_learning_rate(optimizer, epoch)
 
-        #train(val_loader, model, criterion, optimizer, args.aspect)
+        train(trai_loader, model, criterion, optimizer, args.aspect)
         
-        #loss = validate(val_loader, model, criterion, args.aspect)
-        loss = 12
+        loss = validate(val_loader, model, criterion, args.aspect)
 
         log(epoch, loss)
 
