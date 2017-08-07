@@ -102,7 +102,8 @@ def main():
 
         #train(val_loader, model, criterion, optimizer, args.aspect)
         
-        loss = validate(val_loader, model, criterion, args.aspect)
+        #loss = validate(val_loader, model, criterion, args.aspect)
+        loss = 21
 
         log(epoch, loss)
 
@@ -163,18 +164,23 @@ def adjust_learning_rate(optimizer, epoch):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, filename='baseline_checkpoint.pth.tar'):
     """
     State is a dictionary that cotains valuable information to be saved.
     """
     if args.remote:
-    	destination = os.path.join(ckp_path_remote,filename)
+        destination = os.path.join(args.ckp_path_remote, filename)
     else:
-    	destination = os.path.join(ckp_path_remote,filename)
+        destination = os.path.join(args.ckp_path_local, filename)
     
     torch.save(state, destination)
     if is_best:
-        shutil.copyfile(destination, 'model_best.pth.tar')
+        if args.remote:
+            best_destination = os.path.join(args.ckp_path_remote, 'baseline_model_best.pth.tar')
+        else:
+            best_destination = os.path.join(args.ckp_path_local, 'baseline_model_best.pth.tar')
+        
+        shutil.copyfile(destination, best_destination)
 
 if __name__ == '__main__':
     main()
