@@ -100,7 +100,7 @@ def main():
 
         adjust_learning_rate(optimizer, epoch)
 
-        train(trai_loader, model, criterion, optimizer, args.aspect)
+        train(train_loader, model, criterion, optimizer, args.aspect)
         
         loss = validate(val_loader, model, criterion, args.aspect)
 
