@@ -96,6 +96,7 @@ def main():
 
     ### Loop
     torch.manual_seed(0)
+    print("started loop")
     for epoch in range(args.epochs):
 
         adjust_learning_rate(optimizer, epoch)
@@ -115,6 +116,7 @@ def main():
                 'optimizer': optimizer.state_dict()} 
 
         save_checkpoint(save, is_best)
+        print("saved a checkpoint")
 
     print('*'*20, 'SUCCESS','*'*20)
 
@@ -134,6 +136,7 @@ def train(loader, model, criterion, optimizer, aspect):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        print("trained one epoch")
 
 def validate(loader, model, criterion, aspect):
 
@@ -150,6 +153,7 @@ def validate(loader, model, criterion, aspect):
         pred = model(review)
         loss = criterion(pred, target)
         total_loss += loss.data[0]
+        print("validated one epoch")
 
     return total_loss
 
