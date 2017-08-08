@@ -101,7 +101,7 @@ def main():
 
         adjust_learning_rate(optimizer, epoch)
 
-        train(train_loader, model, criterion, optimizer, args.aspect)
+        #train(train_loader, model, criterion, optimizer, args.aspect)
         
         loss = validate(val_loader, model, criterion, args.aspect)
 
@@ -136,7 +136,7 @@ def train(loader, model, criterion, optimizer, aspect):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        print("trained one epoch")
+        print("trained one batch")
 
 def validate(loader, model, criterion, aspect):
 
@@ -153,7 +153,7 @@ def validate(loader, model, criterion, aspect):
         pred = model(review)
         loss = criterion(pred, target)
         total_loss += loss.data[0]
-        print("validated one epoch")
+        print("validated one batch")
 
     return total_loss
 
