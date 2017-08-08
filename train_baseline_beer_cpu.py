@@ -69,7 +69,7 @@ def main():
 
     torch.manual_seed(0)
     train_loader = DataLoader(train_set, args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, val_set.data_tensor.size(0))
+    val_loader = DataLoader(val_set, args.batch_size)
     print("loader defined")
 
     ### Build model
@@ -102,11 +102,12 @@ def main():
         adjust_learning_rate(optimizer, epoch)
 
         #train(train_loader, model, criterion, optimizer, args.aspect)
+        #loss = 1
         
-        #loss = validate(val_loader, model, criterion, args.aspect)
-        loss = 1
-
+        loss = validate(val_loader, model, criterion, args.aspect)
+        
         log(epoch, loss)
+        print("logged")
 
         is_best = loss < lowest_loss
         lowest_loss = min(loss, lowest_loss)    
@@ -126,6 +127,7 @@ def train(loader, model, criterion, optimizer, aspect):
 
     for t, (review, target) in enumerate(loader):
         review = Variable(review)
+
         if args.aspect == 'all':
             target = Variable(target[:,:3])
         else:
@@ -146,6 +148,7 @@ def validate(loader, model, criterion, aspect):
     for (review, target) in loader:
 
         review = Variable(review, volatile=True)
+
         if args.aspect == 'all':
             target = Variable(target[:,:3], volatile=True)
         else:
@@ -153,6 +156,7 @@ def validate(loader, model, criterion, aspect):
 
         pred = model(review)
         loss = criterion(pred, target)
+        
         total_loss += loss.data[0]
         print("validated one batch")
 
