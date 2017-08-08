@@ -145,7 +145,7 @@ def validate(loader, model, criterion, aspect):
 
     total_loss = 0.0
 
-    for (review, target) in loader:
+    for i, (review, target) in enumerate(loader, 1):
 
         review = Variable(review, volatile=True)
 
@@ -157,7 +157,9 @@ def validate(loader, model, criterion, aspect):
         pred = model(review)
         loss = criterion(pred, target)
         
-        total_loss += loss.data[0]
+        delta = loss.data[0] - total_loss
+        total_loss += (delta / i)
+        
         print("validated one batch")
 
     return total_loss
