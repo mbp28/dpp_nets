@@ -11,6 +11,7 @@ from dpp_nets.utils.io import make_embd, make_tensor_dataset
 from dpp_nets.layers.layers import DeepSetBaseline
 
 parser = argparse.ArgumentParser(description='Baseline (Deep Sets) Trainer')
+
 parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all'],
                     help='what is the target?', required=True)
 parser.add_argument('--remote', type=int,
@@ -35,7 +36,7 @@ parser.add_argument('--epochs', default=30, type=int, metavar='N',
 #                    metavar='LRk', help='initial learning rate for kernel net')
 #parser.add_argument('--lr-p', '--learning-rate-p', default=0.1, type=float,
 #                    metavar='LRp', help='initial learning rate for pred net')
-parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
+parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float,
                     metavar='LR', help='initial learning rate for baseline')
 #parser.add_argument('--reg', type=float, required=True,
 #                    metavar='reg', help='regularization constant')
@@ -44,7 +45,7 @@ parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
 
 def main():
 
-    global args, best_prec1
+    global args, lowest_loss
 
     args = parser.parse_args()
     lowest_loss = 100 # arbitrary high number as upper bound for loss
@@ -174,8 +175,8 @@ def log(epoch, loss):
         log.write(string + '\n')
 
 def adjust_learning_rate(optimizer, epoch):
-    """Sets the learning rate to the initial LR decayed by 10 every 5 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 5))
+    """Sets the learning rate to the initial LR multiplied by factor 0.1 for every 10 epochs"""
+    lr = args.lr * (0.1 ** (epoch // 10))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 

@@ -518,43 +518,57 @@ class PredNet(nn.Module):
 
 class MarginalTrainer(nn.Module):
 
-    def __init__(self, KernelNet, Sampler, PredNet):
+    def __init__(self, Embedding, hidden_dim, kernel_dim, enc_dim, target_dim):
 
         super(MarginalTrainer, self).__init__()
 
-        self.kernel_net = KernelNet
-        self.sampler = Sampler
-        self.pred_net = PredNet
+        self.embd = Embedding
+        
+        self.embd_dim = self.embd.weight.size(1)
+        self.hidden_dim = hidden_dim
+        self.kernel_dim = kernel_dim
+        self.enc_dim = enc_dim
+        self.target_dim = target_dim
+
+        self.kernel_net = KernelVar(self.embd_dim, self.hidden_dim, self.kernel_dim)
+        self.sampler = MarginalSampler()
+        self.pred_net = PredNet(self.embd_dim, self.hidden_dim, self.enc_dim, self.target_dim)
 
         self.criterion = nn.MSELoss()
         self.activation = None
+        
+        self.pred_loss = None 
+        self.reg_loss = None
+        self.loss = None
 
         self.reg = None
         self.reg_mean = None
 
-    def forward(self, words, target):
+    def forward(self, reviews, target):
 
-        kernel, words = self.kernel_net(words)
+        words = self.embd(reviews)
+
+        kernel, words = self.kernel_net(words) # returned words are masked now!
 
         self.sampler.s_ix = self.kernel_net.s_ix
         self.sampler.e_ix = self.kernel_net.e_ix
         
-        weighted_words = self.sampler(kernel, words)
+        weighted_words = self.sampler(kernel, words) 
         
         self.pred_net.s_ix = self.sampler.s_ix
         self.pred_net.e_ix = self.sampler.e_ix
         
         pred = self.pred_net(weighted_words)
 
-        pred_loss = self.criterion(pred, target)
+        self.pred_loss = self.criterion(pred, target)
 
         if self.reg:
-            reg_loss = self.reg * (torch.stack(self.sampler.exp_sizes) - self.reg_mean).pow(2).mean()
-            loss = pred_loss + reg_loss
+            self.reg_loss = self.reg * (torch.stack(self.sampler.exp_sizes) - self.reg_mean).pow(2).mean()
+            self.loss = self.pred_loss + self.reg_loss
         else:
-            loss = pred_loss
+            self.loss = self.pred_loss
 
-        return loss
+        return self.loss
 
 class ReinforceTrainer(nn.Module):
 
