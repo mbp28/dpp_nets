@@ -135,7 +135,7 @@ class DeepSetPred(nn.Module):
 
         for i, word_samples in enumerate(word_picks):
             for words in word_samples:
-                enc = self.enc_net(words).mean(0)
+                enc = self.enc_net(words).sum(0)
                 encodings[i].append(enc)
 
         encodings = torch.stack([torch.stack(enc_samples) for enc_samples in encodings]).squeeze()
@@ -537,6 +537,8 @@ class MarginalTrainer(nn.Module):
         self.criterion = nn.MSELoss()
         self.activation = None
         
+        self.pred = None
+
         self.pred_loss = None 
         self.reg_loss = None
         self.loss = None
@@ -558,9 +560,12 @@ class MarginalTrainer(nn.Module):
         self.pred_net.s_ix = self.sampler.s_ix
         self.pred_net.e_ix = self.sampler.e_ix
         
-        pred = self.pred_net(weighted_words)
+        self.pred = self.pred_net(weighted_words)
 
-        self.pred_loss = self.criterion(pred, target)
+        if self.activation:
+            self.pred = self.activation(self.pred)
+
+        self.pred_loss = self.criterion(self.pred, target)
 
         if self.reg:
             self.reg_loss = self.reg * (torch.stack(self.sampler.exp_sizes) - self.reg_mean).pow(2).mean()
@@ -591,6 +596,10 @@ class ReinforceTrainer(nn.Module):
         # Register
         self.pred = None
 
+        self.pred_loss = None 
+        self.reg_loss = None
+        self.loss = None
+
         self.saved_subsets = None
         self.saved_losses = None
         self.saved_baselines = None
@@ -618,15 +627,14 @@ class ReinforceTrainer(nn.Module):
         if self.activation:
             self.pred = self.activation(self.pred)
 
-        pred_loss = self.criterion(self.pred, target)
-        #print("pred_loss is:", pred_loss.data[0])
+        self.pred_loss = self.criterion(self.pred, target)
 
         if self.reg:
-            reg_loss = self.reg * (torch.stack(self.sampler.exp_sizes) - self.reg_mean).pow(2).mean()
-            loss = pred_loss + reg_loss
+            self.reg_loss = self.reg * (torch.stack(self.sampler.exp_sizes) - self.reg_mean).pow(2).mean()
+            self.loss = pred_loss + reg_loss
             # print("reg_loss is:", reg_loss.data[0])
         else:
-            loss = pred_loss
+            self.loss = self.pred_loss
 
         # add computation of baselines and registering reawards here!!
         losses = (self.pred - target).pow(2).view(batch_size, alpha_iter, target_dim).mean(2)

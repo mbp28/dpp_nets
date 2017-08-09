@@ -102,8 +102,8 @@ def main():
 
         adjust_learning_rate(optimizer, epoch)
 
-        train(train_loader, model, criterion, optimizer, args.aspect)        
-        loss = validate(val_loader, model, criterion, args.aspect)
+        train(train_loader, model, criterion, optimizer)        
+        loss = validate(val_loader, model, criterion)
         
         log(epoch, loss)
         print("logged")
@@ -122,7 +122,7 @@ def main():
     print('*'*20, 'SUCCESS','*'*20)
 
 
-def train(loader, model, criterion, optimizer, aspect):
+def train(loader, model, criterion, optimizer):
 
     for t, (review, target) in enumerate(loader):
         review = Variable(review)
@@ -140,7 +140,7 @@ def train(loader, model, criterion, optimizer, aspect):
         optimizer.step()
         print("trained one batch")
 
-def validate(loader, model, criterion, aspect):
+def validate(loader, model, criterion):
 
     total_loss = 0.0
 
@@ -167,9 +167,9 @@ def log(epoch, loss):
     string = str.join(" | ", ['Epoch: %d' % (epoch), 'Validation Loss: %.5f' % (loss)])
 
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + 'DeepSetBaseline_log.txt')
+        destination = os.path.join(args.ckp_path_remote, args.aspect + 'marginal_log.txt')
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + 'DeepSetBaseline_log.txt')
+        destination = os.path.join(args.ckp_path_local, args.aspect + 'marginal_log.txt')
 
     with open(destination, 'a') as log:
         log.write(string + '\n')
