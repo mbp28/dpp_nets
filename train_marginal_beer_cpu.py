@@ -185,9 +185,9 @@ def log(epoch, loss, pred_loss, reg_loss):
                               'V Pred Loss: %.5f' % (pred_loss), 'V Reg Loss: %.5f' % (reg_loss)])
 
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + args.reg + 'reg_mean' + args.reg_mean + 'marginal_log.txt')
+        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'marginal_log.txt')
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + args.reg + 'reg_mean' + args.reg_mean + 'marginal_log.txt')
+        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'marginal_log.txt')
 
     with open(destination, 'a') as log:
         log.write(string + '\n')
@@ -197,17 +197,17 @@ def save_checkpoint(state, is_best, filename='marginal_checkpoint.pth.tar'):
     State is a dictionary that cotains valuable information to be saved.
     """
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + args.reg + 'reg_mean' + args.reg_mean + filename)
+        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + filename)
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + args.reg + 'reg_mean' + args.reg_mean + filename)
+        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + filename)
     
     torch.save(state, destination)
 
     if is_best:
         if args.remote:
-            best_destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + args.reg + 'reg_mean' + args.reg_mean + 'marginal_best.pth.tar')
+            best_destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'marginal_best.pth.tar')
         else:
-            best_destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + args.reg + 'reg_mean' + args.reg_mean +  'marginal_best.pth.tar')
+            best_destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) +  'marginal_best.pth.tar')
         
         shutil.copyfile(destination, best_destination)
 
