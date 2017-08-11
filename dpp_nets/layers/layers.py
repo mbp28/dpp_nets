@@ -24,7 +24,7 @@ class KernelFixed(nn.Module):
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, kernel_dim)
 
-        self.net = nn.Sequential(self.layer1, nn.ELU(), self.layer2, nn.ELU(), self.layer3)
+        self.net = nn.Sequential(self.layer1, nn.tanh(), self.layer2, nn.tanh(), self.layer3)
 
 
     def forward(self, words):
@@ -60,7 +60,7 @@ class KernelVar(nn.Module):
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, kernel_dim)
 
-        self.net = nn.Sequential(self.layer1, nn.ELU(), self.layer2, nn.ELU(), self.layer3)
+        self.net = nn.Sequential(self.layer1, nn.tanh(), self.layer2, nn.tanh(), self.layer3)
 
         self.s_ix = []
         self.e_ix = []
@@ -108,13 +108,13 @@ class DeepSetPred(nn.Module):
         self.enc_layer1 = nn.Linear(embd_dim, hidden_dim)
         self.enc_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
-        self.enc_net = nn.Sequential(self.enc_layer1, nn.ReLU(), self.enc_layer2, nn.ReLU(), self.enc_layer3)
+        self.enc_net = nn.Sequential(self.enc_layer1, nn.tanh(), self.enc_layer2, nn.tanh(), self.enc_layer3)
 
         # Uses the sum of the encoded vectors to make a final prediction
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.pred_layer3 = nn.Linear(hidden_dim, target_dim)
-        self.pred_net = nn.Sequential(self.pred_layer1, nn.ReLU(), self.pred_layer2, nn.ReLU(), self.pred_layer3)
+        self.pred_net = nn.Sequential(self.pred_layer1, nn.tanh(), self.pred_layer2, nn.tanh(), self.pred_layer3)
 
     def forward(self, word_picks):
         """
@@ -290,13 +290,13 @@ class DeepSetBaseline(nn.Module):
         self.enc_layer1 = nn.Linear(embd_dim, hidden_dim)
         self.enc_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
-        self.enc_net = nn.Sequential(self.enc_layer1, nn.ReLU(), self.enc_layer2, nn.ReLU(), self.enc_layer3)
+        self.enc_net = nn.Sequential(self.enc_layer1, nn.tanh(), self.enc_layer2, nn.tanh(), self.enc_layer3)
 
         # Uses the sum of the encoded vectors to make a final prediction
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.pred_layer3 = nn.Linear(hidden_dim, target_dim)
-        self.pred_net = nn.Sequential(self.pred_layer1, nn.ReLU(), self.pred_layer2, nn.ReLU(), self.pred_layer3)
+        self.pred_net = nn.Sequential(self.pred_layer1, nn.tanh(), self.pred_layer2, nn.tanh(), self.pred_layer3)
 
     def forward(self, words):
         """
@@ -480,13 +480,13 @@ class PredNet(nn.Module):
         self.enc_layer1 = nn.Linear(embd_dim, hidden_dim)
         self.enc_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
-        self.enc_net = nn.Sequential(self.enc_layer1, nn.ReLU(), self.enc_layer2, nn.ReLU(), self.enc_layer3)
+        self.enc_net = nn.Sequential(self.enc_layer1, nn.tanh(), self.enc_layer2, nn.tanh(), self.enc_layer3)
 
         # Uses the sum of the encoded vectors to make a final prediction
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.pred_layer3 = nn.Linear(hidden_dim, target_dim)
-        self.pred_net = nn.Sequential(self.pred_layer1, nn.ReLU(), self.pred_layer2, nn.ReLU(), self.pred_layer3)
+        self.pred_net = nn.Sequential(self.pred_layer1, nn.tanh(), self.pred_layer2, nn.tanh(), self.pred_layer3)
 
         self.s_ix = None
         self.e_ix = None
