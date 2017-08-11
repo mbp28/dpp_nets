@@ -110,6 +110,8 @@ class DeepSetPred(nn.Module):
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
         self.enc_net = nn.Sequential(self.enc_layer1, nn.tanh(), self.enc_layer2, nn.tanh(), self.enc_layer3)
 
+        self.batch_norm = nn.BatchNorm1d(enc_dim)
+
         # Uses the sum of the encoded vectors to make a final prediction
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
@@ -142,7 +144,7 @@ class DeepSetPred(nn.Module):
         batch_size, alpha_iter, enc_dim = encodings.size()
 
         batch_encodings = encodings.view(-1, enc_dim)
-        batch_pred = self.pred_net(batch_encodings)
+        batch_pred = self.pred_net(self.batch_norm(batch_encodings))
 
         pred = batch_pred.view(batch_size, alpha_iter, target_dim)
 
@@ -292,6 +294,8 @@ class DeepSetBaseline(nn.Module):
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
         self.enc_net = nn.Sequential(self.enc_layer1, nn.tanh(), self.enc_layer2, nn.tanh(), self.enc_layer3)
 
+        self.batch_norm = nn.BatchNorm1d(enc_dim)
+
         # Uses the sum of the encoded vectors to make a final prediction
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
@@ -336,7 +340,7 @@ class DeepSetBaseline(nn.Module):
         assert enc_dim == codes.size(1)
 
         # Produce predictions using codes
-        pred = self.pred_net(codes)
+        pred = self.pred_net(self.batch_norm(codes))
 
         return pred 
 

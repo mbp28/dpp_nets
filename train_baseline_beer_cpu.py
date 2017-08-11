@@ -124,6 +124,8 @@ def main():
 
 def train(loader, model, criterion, optimizer):
 
+    model.train()
+
     for t, (review, target) in enumerate(loader):
         review = Variable(review)
 
@@ -141,6 +143,8 @@ def train(loader, model, criterion, optimizer):
         print("trained one batch")
 
 def validate(loader, model, criterion):
+
+    model.eval()
 
     total_loss = 0.0
 
