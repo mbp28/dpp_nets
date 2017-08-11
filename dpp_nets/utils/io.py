@@ -6,6 +6,7 @@ import torch.nn as nn
 from collections import OrderedDict
 import json
 import numpy as np
+import re
 
 from torch.utils.data import TensorDataset
 from dpp_nets.my_torch.utilities import pad_tensor
@@ -75,21 +76,48 @@ def load_embd(embd_dict_path):
 
 def make_tensor_dataset(data_path, word_to_ix, max_set_size=0, save_path=None):
         
-    if not max_set_size:
-        for (review, target) in data_iterator(data_path):
-            review = [(word in word_to_ix) for word in review]
-            max_set_size = max(sum(review),max_set_size)
+    #if not max_set_size:
             
-    reviews, targets = [], []
+    #reviews, targets = [], []
 
-    for (review, target) in data_iterator(data_path):
-        review = [word_to_ix[word] + 1 for word in review if word in word_to_ix]
+    #for (review, target) in data_iterator(data_path):
+        #review = [word_to_ix[word] + 1 for word in review if word in word_to_ix]
+        #review = torch.LongTensor(review)
+        #review = pad_tensor(review, 0, 0, max_set_size)
+        #reviews.append(review)
+        #targets.append(target)
+    
+    #reviews = torch.stack(reviews)
+    #targets = torch.stack(targets)
+
+    reviews = []
+    targets = []
+    max_set_size = 0
+
+    for i, (review, target) in enumerate(data_iterator(data_path)):
+        review_ix = []
+        for word in review:
+            if word in word_to_ix:
+                ix = word_to_ix[word] + 1
+                review_ix.append(ix)
+            else:
+                candidates = re.split('[;|,-/."]',word)
+                for word in candidates:
+                    if word in word_to_ix:
+                        ix = word_to_ix[word] + 1
+                        review_ix.append(ix)
+
+        max_set_size = max(max_set_size, len(review_ix))
+        reviews.append(review_ix)
+        targets.append(target)
+
+    reviews_tensor = []	
+    for review in reviews:
         review = torch.LongTensor(review)
         review = pad_tensor(review, 0, 0, max_set_size)
-        reviews.append(review)
-        targets.append(target)
-    
-    reviews = torch.stack(reviews)
+        reviews_tensor.append(review)
+
+    reviews = torch.stack(reviews_tensor)
     targets = torch.stack(targets)
 
     dataset = TensorDataset(reviews, targets)
@@ -101,9 +129,9 @@ def make_tensor_dataset(data_path, word_to_ix, max_set_size=0, save_path=None):
 
 def load_tensor_dataset(data_set_path):
 
-	dataset = torch.load(data_set_path)
+    dataset = torch.load(data_set_path)
 
-	return dataset
+    return dataset
 
 def missing_embd(data_path, word_to_ix):
     missing = []
