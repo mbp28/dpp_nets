@@ -8,10 +8,10 @@ from torch.autograd import Variable
 from torch.utils.data.dataloader import DataLoader
 
 from dpp_nets.utils.io import make_embd, make_tensor_dataset
-from dpp_nets.layers.layers import MarginalTrainer
+from dpp_nets.layers.layers import KernelVar, ReinforceSampler, PredNet, ReinforceTrainer
 
 
-parser = argparse.ArgumentParser(description='Marginal Krause Trainer')
+parser = argparse.ArgumentParser(description='REINFORCE VIMCO Trainer')
 
 parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all'],
                     help='what is the target?', required=True)
@@ -28,27 +28,42 @@ parser.add_argument('--reg', type=float, required=True,
                     metavar='reg', help='regularization constant')
 parser.add_argument('--reg_mean', type=float, required=True,
                     metavar='reg_mean', help='regularization_mean')
+parser.add_argument('--alpha_iter', type=int, required=True,
+                    metavar='alpha_iter', help='How many subsets to sample from DPP? At least 2!')
+
+# Pre-training
+parser.add_argument('--pretrain_kernel', type=str, default="",
+                    metavar='pretrain_kernel', help='Give name of pretrain_kernel')
+parser.add_argument('--pretrain_pred', type=str, default="",
+                    metavar='pretrain_pred', help='Give name of pretrain_pred')
 
 # Train locally or remotely?
 parser.add_argument('--remote', type=int,
                     help='training locally or on cluster?', required=True)
+
 # Burnt in Paths..
 parser.add_argument('--data_path_local', type=str, default='/Users/Max/data/beer_reviews',
                     help='where is the data folder locally?')
 parser.add_argument('--data_path_remote', type=str, default='/cluster/home/paulusm/data/beer_reviews',
-                    help='where is the data folder?')
+                    help='where is the data folder remotely?')
 parser.add_argument('--ckp_path_local', type=str, default='/Users/Max/checkpoints/beer_reviews',
-                    help='where is the data folder locally?')
+                    help='where is the checkpoints folder locally?')
 parser.add_argument('--ckp_path_remote', type=str, default='/cluster/home/paulusm/checkpoints/beer_reviews',
-                    help='where is the data folder?')
+                    help='where is the data folder remotely?')
+
+parser.add_argument('--pretrain_path_local', type=str, default='/Users/Max/checkpoints/beer_reviews',
+                    help='where is the pre_trained model? locally')
+parser.add_argument('--pretrain_path_remote', type=str, default='/cluster/home/paulusm/pretrain/beer_reviews',
+                    help='where is the data folder? remotely')
 
 
 def main():
 
-    global args, lowest_loss
+    global args, lowest_loss, dtype
 
     args = parser.parse_args()
     lowest_loss = 100 # arbitrary high number as upper bound for loss
+    dtype = torch.DoubleTensor
 
     ### Load data
     if args.remote:
@@ -85,16 +100,39 @@ def main():
         target_dim = 1
 
     # Model
-    torch.manual_seed(0)
-    trainer = MarginalTrainer(embd, hidden_dim, kernel_dim, enc_dim, target_dim)
-    trainer.activation = nn.Sigmoid()
+    torch.manual_seed(1)
+
+
+    # Add pre-training here...
+    kernel_net = KernelVar(embd_dim, hidden_dim, kernel_dim)
+    sampler = ReinforceSampler(args.alpha_iter)
+    pred_net = PredNet(embd_dim, hidden_dim, enc_dim, target_dim)
+
+    if args.pretrain_kernel:
+        if args.remote:
+            state_dict = torch.load(args.pretrain_path_remote + args.pretrain_kernel)
+        else:
+            state_dict = torch.load(args.pretrain_path_local + args.pretrain_kernel)
+        kernel_net.load_state_dict(state_dict)
+
+    if args.pretrain_pred:
+        if args.remote:
+            state_dict = torch.load(args.pretrain_path_remote + args.pretrain_pred)
+        else:
+            state_dict = torch.load(args.pretrain_path_local + args.pretrain_pred)
+        pred_net.load_state_dict(state_dict)
+
+    # continue with trainer
+    trainer = ReinforceTrainer(embd, kernel_net, sampler, pred_net)
     trainer.reg = args.reg
     trainer.reg_mean = args.reg_mean
+    trainer.activation = nn.Sigmoid()
+    trainer.type(dtype)
+
     print("created trainer")
 
-    # Set-up Training
     params = [{'params': trainer.kernel_net.parameters(), 'lr': args.lr_k},
-              {'params': trainer.pred_net.parameters(),   'lr': args.lr_p}]
+              {'params': trainer.pred_net.parameters(), 'lr': args.lr_p}]
     optimizer = torch.optim.Adam(params)
     print('set-up optimizer')
 
@@ -105,7 +143,7 @@ def main():
 
         adjust_learning_rate(optimizer, epoch)
 
-        train(train_loader, trainer, optimizer)        
+        train(train_loader, trainer, optimizer)
         loss, pred_loss, reg_loss = validate(val_loader, trainer)
         
         log(epoch, loss, pred_loss, reg_loss)
@@ -124,6 +162,7 @@ def main():
 
     print('*'*20, 'SUCCESS','*'*20)
 
+
 def train(loader, trainer, optimizer):
 
     trainer.train()
@@ -132,33 +171,34 @@ def train(loader, trainer, optimizer):
         review = Variable(review)
 
         if args.aspect == 'all':
-            target = Variable(target[:,:3])
+            target = Variable(target[:,:3]).type(dtype)
         else:
-            target = Variable(target[:,int(args.aspect[-1])])
+            target = Variable(target[:,int(args.aspect[-1])]).type(dtype)
 
         loss  = trainer(review, target)
         
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        #print("trained one batch")
+        print("trained one batch")
 
 def validate(loader, trainer):
-
+    """
+    Note, we keep the sampling as before. 
+    i.e what ever alpha_iter is, we take it. 
+    """
     trainer.eval()
-
     total_loss = 0.0
     total_pred_loss = 0.0
     total_reg_loss = 0.0
 
     for i, (review, target) in enumerate(loader, 1):
-
         review = Variable(review, volatile=True)
 
         if args.aspect == 'all':
-            target = Variable(target[:,:3], volatile=True)
+            target = Variable(target[:,:3], volatile=True).type(dtype)
         else:
-            target = Variable(target[:,int(args.aspect[-1])], volatile=True)
+            target = Variable(target[:,int(args.aspect[-1])], volatile=True).type(dtype)
 
         trainer(review, target)
         loss = trainer.loss.data[0]
@@ -172,7 +212,7 @@ def validate(loader, trainer):
         delta = reg_loss - total_reg_loss
         total_reg_loss += (delta / i)
 
-        # print("validated one batch")
+# print("validated one batch")
 
     return total_loss, total_pred_loss, total_reg_loss
 
@@ -189,34 +229,37 @@ def log(epoch, loss, pred_loss, reg_loss):
                               'V Pred Loss: %.5f' % (pred_loss), 'V Reg Loss: %.5f' % (reg_loss)])
 
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'marginal_log.txt')
+        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
+          'alpha_iter' + str(args.alpha_iter) + str(args.pretrain_kernel) + str(args.pretrain_pred) + 'reinforce_log.txt')
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'marginal_log.txt')
+        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
+          'alpha_iter' + str(args.alpha_iter) + str(args.pretrain_kernel) + str(args.pretrain_pred) + 'reinforce_log.txt')
 
     with open(destination, 'a') as log:
         log.write(string + '\n')
 
-def save_checkpoint(state, is_best, filename='marginal_checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, filename='reinforce_checkpoint.pth.tar'):
     """
     State is a dictionary that cotains valuable information to be saved.
     """
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + filename)
+        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
+          'alpha_iter' + str(args.alpha_iter) + str(args.pretrain_kernel) + str(args.pretrain_pred) + str(args.filename))
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + filename)
+        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
+          'alpha_iter' + str(args.alpha_iter) + str(args.pretrain_kernel) + str(args.pretrain_pred) + str(args.filename))
     
     torch.save(state, destination)
 
     if is_best:
         if args.remote:
-            best_destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'marginal_best.pth.tar')
+            best_destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
+               'alpha_iter' + str(args.alpha_iter) + str(args.pretrain_kernel) + str(args.pretrain_pred) + 'reinforce_best.pth.tar')
         else:
-            best_destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) +  'marginal_best.pth.tar')
+            best_destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) +  
+               'alpha_iter' + str(args.alpha_iter) + str(args.pretrain_kernel) + str(args.pretrain_pred) + 'reinforce_best.pth.tar')
         
         shutil.copyfile(destination, best_destination)
 
 if __name__ == '__main__':
     main()
-    
-
-

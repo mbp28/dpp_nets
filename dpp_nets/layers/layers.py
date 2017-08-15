@@ -24,7 +24,7 @@ class KernelFixed(nn.Module):
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, kernel_dim)
 
-        self.net = nn.Sequential(self.layer1, nn.tanh(), self.layer2, nn.tanh(), self.layer3)
+        self.net = nn.Sequential(self.layer1, nn.Tanh(), self.layer2, nn.Tanh(), self.layer3)
 
 
     def forward(self, words):
@@ -60,7 +60,7 @@ class KernelVar(nn.Module):
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, kernel_dim)
 
-        self.net = nn.Sequential(self.layer1, nn.tanh(), self.layer2, nn.tanh(), self.layer3)
+        self.net = nn.Sequential(self.layer1, nn.Tanh(), self.layer2, nn.Tanh(), self.layer3)
 
         self.s_ix = []
         self.e_ix = []
@@ -108,7 +108,7 @@ class DeepSetPred(nn.Module):
         self.enc_layer1 = nn.Linear(embd_dim, hidden_dim)
         self.enc_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
-        self.enc_net = nn.Sequential(self.enc_layer1, nn.tanh(), self.enc_layer2, nn.tanh(), self.enc_layer3)
+        self.enc_net = nn.Sequential(self.enc_layer1, nn.Tanh(), self.enc_layer2, nn.Tanh(), self.enc_layer3)
 
         self.batch_norm = nn.BatchNorm1d(enc_dim)
 
@@ -116,7 +116,7 @@ class DeepSetPred(nn.Module):
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.pred_layer3 = nn.Linear(hidden_dim, target_dim)
-        self.pred_net = nn.Sequential(self.pred_layer1, nn.tanh(), self.pred_layer2, nn.tanh(), self.pred_layer3)
+        self.pred_net = nn.Sequential(self.pred_layer1, nn.Tanh(), self.pred_layer2, nn.Tanh(), self.pred_layer3)
 
     def forward(self, word_picks):
         """
@@ -292,7 +292,7 @@ class DeepSetBaseline(nn.Module):
         self.enc_layer1 = nn.Linear(embd_dim, hidden_dim)
         self.enc_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
-        self.enc_net = nn.Sequential(self.enc_layer1, nn.tanh(), self.enc_layer2, nn.tanh(), self.enc_layer3)
+        self.enc_net = nn.Sequential(self.enc_layer1, nn.Tanh(), self.enc_layer2, nn.Tanh(), self.enc_layer3)
 
         self.batch_norm = nn.BatchNorm1d(enc_dim)
 
@@ -300,7 +300,7 @@ class DeepSetBaseline(nn.Module):
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.pred_layer3 = nn.Linear(hidden_dim, target_dim)
-        self.pred_net = nn.Sequential(self.pred_layer1, nn.tanh(), self.pred_layer2, nn.tanh(), self.pred_layer3)
+        self.pred_net = nn.Sequential(self.pred_layer1, nn.Tanh(), self.pred_layer2, nn.Tanh(), self.pred_layer3)
 
     def forward(self, words):
         """
@@ -484,13 +484,13 @@ class PredNet(nn.Module):
         self.enc_layer1 = nn.Linear(embd_dim, hidden_dim)
         self.enc_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
-        self.enc_net = nn.Sequential(self.enc_layer1, nn.tanh(), self.enc_layer2, nn.tanh(), self.enc_layer3)
+        self.enc_net = nn.Sequential(self.enc_layer1, nn.Tanh(), self.enc_layer2, nn.Tanh(), self.enc_layer3)
 
         # Uses the sum of the encoded vectors to make a final prediction
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.pred_layer3 = nn.Linear(hidden_dim, target_dim)
-        self.pred_net = nn.Sequential(self.pred_layer1, nn.tanh(), self.pred_layer2, nn.tanh(), self.pred_layer3)
+        self.pred_net = nn.Sequential(self.pred_layer1, nn.Tanh(), self.pred_layer2, nn.Tanh(), self.pred_layer3)
 
         self.s_ix = None
         self.e_ix = None
@@ -581,9 +581,11 @@ class MarginalTrainer(nn.Module):
 
 class ReinforceTrainer(nn.Module):
 
-    def __init__(self, KernelNet, Sampler, PredNet):
+    def __init__(self, Embedding, KernelNet, Sampler, PredNet):
 
         super(ReinforceTrainer, self).__init__()
+
+        self.embd = Embedding
 
         self.kernel_net = KernelNet
         self.sampler = Sampler
@@ -609,13 +611,22 @@ class ReinforceTrainer(nn.Module):
         self.saved_baselines = None
 
 
-    def forward(self, words, target):
+    def forward(self, reviews, target):
 
         batch_size = target.size(0)
         alpha_iter = self.alpha_iter
-        target_dim = target.size(1)
+        try:
+            target_dim = target.size(1)
+        except RuntimeError:
+            target = target.unsqueeze(1)
+            target_dim = target.size(1)
+            
+        print(target_dim)
 
         target = target.unsqueeze(1).expand(batch_size, alpha_iter, target_dim).contiguous().view(batch_size * alpha_iter, target_dim)
+        print(target.size())
+        words = self.embd(reviews)
+        
         kernel, words = self.kernel_net(words)
 
         self.sampler.s_ix = self.kernel_net.s_ix
@@ -635,7 +646,7 @@ class ReinforceTrainer(nn.Module):
 
         if self.reg:
             self.reg_loss = self.reg * (torch.stack(self.sampler.exp_sizes) - self.reg_mean).pow(2).mean()
-            self.loss = pred_loss + reg_loss
+            self.loss = self.pred_loss + self.reg_loss
             # print("reg_loss is:", reg_loss.data[0])
         else:
             self.loss = self.pred_loss
@@ -655,7 +666,7 @@ class ReinforceTrainer(nn.Module):
             for action, reward in zip(actions, rewards):
                 action.reinforce(reward)
                 
-        return loss
+        return self.loss
 
 ## Kernel Network
 # Input: words (batch_size x max_set_size x embd_dim)
