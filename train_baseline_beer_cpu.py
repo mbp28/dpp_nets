@@ -171,16 +171,16 @@ def log(epoch, loss):
     string = str.join(" | ", ['Epoch: %d' % (epoch), 'Validation Loss: %.5f' % (loss)])
 
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + 'marginal_log.txt')
+        destination = os.path.join(args.ckp_path_remote, args.aspect + str(args.lr) + 'marginal_log.txt')
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + 'marginal_log.txt')
+        destination = os.path.join(args.ckp_path_local, args.aspect + str(args.lr) + 'marginal_log.txt')
 
     with open(destination, 'a') as log:
         log.write(string + '\n')
 
 def adjust_learning_rate(optimizer, epoch):
-    """Sets the learning rate to the initial LR multiplied by factor 0.1 for every 10 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 10))
+    """Sets the learning rate to the initial LR multiplied by factor 0.1 for every 20 epochs"""
+    lr = args.lr * (0.1 ** (epoch // 20))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
@@ -189,16 +189,16 @@ def save_checkpoint(state, is_best, filename='baseline_checkpoint.pth.tar'):
     State is a dictionary that cotains valuable information to be saved.
     """
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + filename)
+        destination = os.path.join(args.ckp_path_remote, args.aspect + str(args.lr) + filename)
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + filename)
+        destination = os.path.join(args.ckp_path_local, args.aspect + str(args.lr) + filename)
     
     torch.save(state, destination)
     if is_best:
         if args.remote:
-            best_destination = os.path.join(args.ckp_path_remote, args.aspect + 'baseline_model_best.pth.tar')
+            best_destination = os.path.join(args.ckp_path_remote, args.aspect + str(args.lr) + 'baseline_model_best.pth.tar')
         else:
-            best_destination = os.path.join(args.ckp_path_local, args.aspect + 'baseline_model_best.pth.tar')
+            best_destination = os.path.join(args.ckp_path_local, args.aspect + str(args.lr) + 'baseline_model_best.pth.tar')
         
         shutil.copyfile(destination, best_destination)
 

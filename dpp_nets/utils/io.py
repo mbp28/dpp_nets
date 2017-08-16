@@ -50,7 +50,10 @@ def make_embd(embd_path, only_index_dict=False, save_path=None):
     
     embd = torch.zeros(1 + vocab_size, embd_dim)
     for i, vec in enumerate(ix_to_vecs.values(), 1): 
-        embd[i] = torch.FloatTensor(vec)
+        try:
+            embd[i] = torch.FloatTensor(vec)
+        except:
+            print("Failed with:", ix_to_word[i-1], vec)
 
     embd_weight_dict = OrderedDict([('weight', embd)])
 
