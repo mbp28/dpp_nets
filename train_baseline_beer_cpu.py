@@ -30,7 +30,7 @@ parser.add_argument('--ckp_path_remote', type=str, default='/cluster/home/paulus
 
 parser.add_argument('-b', '--batch-size', default=50, type=int,
                     metavar='N', help='mini-batch size (default: 50)')
-parser.add_argument('--epochs', default=30, type=int, metavar='N',
+parser.add_argument('--epochs', default=100, type=int, metavar='N',
                     help='number of total epochs to run')
 #parser.add_argument('--lr-k', '--learning-rate-k', default=0.1, type=float,
 #                    metavar='LRk', help='initial learning rate for kernel net')
@@ -180,7 +180,7 @@ def log(epoch, loss):
 
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR multiplied by factor 0.1 for every 20 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 20))
+    lr = args.lr * (0.1 ** (epoch // 25))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
