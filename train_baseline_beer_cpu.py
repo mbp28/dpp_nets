@@ -171,9 +171,9 @@ def log(epoch, loss):
     string = str.join(" | ", ['Epoch: %d' % (epoch), 'Validation Loss: %.5f' % (loss)])
 
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + str(args.lr) + 'marginal_log.txt')
+        destination = os.path.join(args.ckp_path_remote, args.aspect + str(args.lr) + 'baseline_log.txt')
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + str(args.lr) + 'marginal_log.txt')
+        destination = os.path.join(args.ckp_path_local, args.aspect + str(args.lr) + 'baseline_log.txt')
 
     with open(destination, 'a') as log:
         log.write(string + '\n')
