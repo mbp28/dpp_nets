@@ -109,7 +109,7 @@ def main():
 
         adjust_learning_rate(optimizer, epoch)
 
-        #train(train_loader, trainer, optimizer)        
+        train(train_loader, trainer, optimizer)        
         loss, pred_loss, reg_loss = validate(val_loader, trainer)
         
         log(epoch, loss, pred_loss, reg_loss)
