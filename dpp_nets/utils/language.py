@@ -39,17 +39,17 @@ def process_batch(nlp, vocab, embd, batch):
     MAX_CHUNK_LENGTH = 271
     MAX_CHUNK_NO = 397
 
-    maxi = 0
-    for review in batch['review']:
-        doc = nlp(review)
-        rep = torch.stack(list(yield_chunk_vec(doc, vocab, embd))).squeeze()
-        maxi = max(maxi, rep.size(0))
+    #maxi = 0
+    #for review in batch['review']:
+     #   doc = nlp(review)
+     #   rep = torch.stack(list(yield_chunk_vec(doc, vocab, embd))).squeeze()
+     #   maxi = max(maxi, rep.size(0))
 
     reps = []
     for review in batch['review']:
         doc = nlp(review)
         rep = torch.stack(list(yield_chunk_vec(doc, vocab, embd))).squeeze()
-        rep = torch.cat([rep, Variable(torch.zeros(maxi + 1 - rep.size(0),rep.size(1)))],dim=0)
+        rep = torch.cat([rep, Variable(torch.zeros(MAX_CHUNK_NO + 1 - rep.size(0),rep.size(1)))],dim=0)
         reps.append(rep)
 
     data_tensor =  torch.stack(reps)
