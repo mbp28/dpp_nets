@@ -72,7 +72,7 @@ def main():
 
     torch.manual_seed(0)
     train_loader = DataLoader(train_set, args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, args.batch_size)
+    val_loader = DataLoader(val_set, 1)
     print("loader defined")
 
     ### Build model
@@ -155,11 +155,11 @@ def validate(loader, model, criterion):
         scores = []
         losses = []
 
-        for i in range(1, len(qs.size(1))):
+        for i in range(1, qs.size(1)):
 
             q = Variable(qs[:,i,:], volatile=True)
             pred = model(q)
-            target = Variable([target[i]], volatile=True)
+            target = Variable(target[i], volatile=True)
             cos_dis = 1 - ((pred * pred0) / (pred0.pow(2).sum().sqrt() * pred.pow(2).sum().sqrt()))
             scores.append(cos_dis.data[0])
             loss = criterion(pred0, pred1, target)

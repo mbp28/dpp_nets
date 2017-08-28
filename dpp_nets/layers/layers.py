@@ -60,7 +60,7 @@ class KernelVar(nn.Module):
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, kernel_dim)
 
-        self.net = nn.Sequential(self.layer1, nn.Tanh(), self.layer2, nn.Tanh(), self.layer3)
+        self.net = nn.Sequential(self.layer1, nn.ELU(), self.layer2, nn.ELU(), self.layer3)
 
         self.s_ix = []
         self.e_ix = []
@@ -79,9 +79,9 @@ class KernelVar(nn.Module):
         context = (words.sum(1) / lengths.expand_as(words.sum(1))).expand_as(words)
 
         # Filter out zero words 
-        mask = words.sum(2).abs().sign().expand_as(words).byte()
-        words = words.masked_select(mask).view(-1, embd_dim)
-        context = context.masked_select(mask).view(-1, embd_dim)
+        mask = words.data.sum(2).abs().sign().expand_as(words).byte()
+        words = words.masked_select(Variable(mask)).view(-1, embd_dim)
+        context = context.masked_select(Variable(mask)).view(-1, embd_dim)
 
         # Concatenate and compute kernel
         batch_x = torch.cat([words, context], dim=1)
@@ -316,13 +316,13 @@ class DeepSetBaseline(nn.Module):
 
         # Unpacking to send through encoder network
         # Register indices of individual instances in batch for reconstruction
-        lengths = words.sum(2).abs().sign().sum(1)
-        s_ix = list(lengths.squeeze().cumsum(0).long().data - lengths.squeeze().long().data)
-        e_ix = list(lengths.squeeze().cumsum(0).long().data)
+        lengths = words.data.sum(2).abs().sign().sum(1)
+        s_ix = list(lengths.squeeze().cumsum(0).long() - lengths.squeeze().long())
+        e_ix = list(lengths.squeeze().cumsum(0).long())
 
         # Filter out zero words 
-        mask = words.sum(2).abs().sign().expand_as(words).byte()
-        words = words.masked_select(mask).view(-1, embd_dim)
+        mask = words.data.sum(2).abs().sign().expand_as(words).byte()
+        words = words.masked_select(Variable(mask)).view(-1, embd_dim)
 
         # Send through encoder network
         enc_words = self.enc_net(words)
@@ -667,6 +667,63 @@ class ReinforceTrainer(nn.Module):
                 action.reinforce(reward)
                 
         return self.loss
+
+
+class ChunkTrainer(nn.Module):
+
+    def __init__(self, embd_dim, hidden_dim, kernel_dim, enc_dim, target_dim):
+
+        super(ChunkTrainer, self).__init__()
+
+        self.embd_dim = embd_dim
+        self.hidden_dim = hidden_dim
+        self.kernel_dim = kernel_dim
+        self.enc_dim = enc_dim
+        self.target_dim = target_dim
+
+        self.kernel_net = KernelVar(self.embd_dim, self.hidden_dim, self.kernel_dim)
+        self.sampler = MarginalSampler()
+        self.pred_net = PredNet(self.embd_dim, self.hidden_dim, self.enc_dim, self.target_dim)
+
+        self.criterion = nn.MSELoss()
+        self.activation = None
+        
+        self.pred = None
+
+        self.pred_loss = None 
+        self.reg_loss = None
+        self.loss = None
+
+        self.reg = None
+        self.reg_mean = None
+
+    def forward(self, words, target):
+
+        kernel, words = self.kernel_net(words) # returned words are masked now!
+
+        self.sampler.s_ix = self.kernel_net.s_ix
+        self.sampler.e_ix = self.kernel_net.e_ix
+        
+        weighted_words = self.sampler(kernel, words) 
+        
+        self.pred_net.s_ix = self.sampler.s_ix
+        self.pred_net.e_ix = self.sampler.e_ix
+        
+        self.pred = self.pred_net(weighted_words)
+
+        if self.activation:
+            self.pred = self.activation(self.pred)
+
+        self.pred_loss = self.criterion(self.pred, target)
+
+        if self.reg:
+            self.reg_loss = self.reg * (torch.stack(self.sampler.exp_sizes) - self.reg_mean).pow(2).mean()
+            self.loss = self.pred_loss + self.reg_loss
+        else:
+            self.loss = self.pred_loss
+
+        return self.loss
+
 
 ## Kernel Network
 # Input: words (batch_size x max_set_size x embd_dim)
