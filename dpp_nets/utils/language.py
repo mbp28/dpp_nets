@@ -57,6 +57,40 @@ def process_batch(nlp, vocab, embd, batch):
     
     return data_tensor, target_tensor
 
+def yield_sen_vec(doc, vocab, embd):
+    seen = set()
+    for s in doc.sents:
+        t = tuple((filter_stops(s, vocab)))
+        if t and t not in seen:
+            seen.add(t)
+            ixs = torch.LongTensor([vocab.word2index[word] for word in t])
+            embd_mat = embd(Variable(ixs)).mean(0)
+            yield embd_mat
+
+def process_batch_sens(nlp, vocab, embd, batch):
+
+    MAX_CHUNK_LENGTH = 271
+    MAX_SENS_NO = 105
+
+    # maxi = 0
+    # for review in batch['review']:
+     #   doc = nlp(review)
+     #   rep = torch.stack(list(yield_chunk_vec(doc, vocab, embd))).squeeze()
+     #   maxi = max(maxi, rep.size(0))
+
+    reps = []
+    for review in batch['review']:
+        doc = nlp(review)
+        rep = torch.stack(list(yield_sen_vec(doc, vocab, embd))).squeeze(1)
+        rep = torch.cat([rep, Variable(torch.zeros(MAX_SENS_NO + 1 - rep.size(0),rep.size(1)))],dim=0)
+        reps.append(rep)
+
+    data_tensor =  torch.stack(reps)
+    target_tensor = Variable(torch.stack(batch['target']).t().float())
+    
+    return data_tensor, target_tensor
+
+
 class Vocabulary:
     
     def __init__(self):

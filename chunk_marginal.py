@@ -64,10 +64,10 @@ def main():
         val_path   = os.path.join(args.data_path_local, str.join(".",['reviews', args.aspect, 'heldout.txt.gz']))
         embd_path = os.path.join(args.data_path_local, 'review+wiki.filtered.200.txt.gz')
 
-    nlp, vocab, embd = create_clean_vocabulary(embd_path, train_path)
+    nlp, vocab, embd = create_clean_vocabulary(embd_path, val_path) # actualy train_path
     embd.weight.requires_grad = False
 
-    train_set = BeerDataset(train_path, aspect=args.aspect)
+    train_set = BeerDataset(val_path, aspect=args.aspect) # actualy train_path
     val_set = BeerDataset(val_path, aspect=args.aspect)
     print("loaded data")
 
