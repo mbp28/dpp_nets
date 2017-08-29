@@ -67,8 +67,8 @@ def main():
     nlp, vocab, embd = create_clean_vocabulary(embd_path, train_path)
     embd.weight.requires_grad = False
 
-    train_set = BeerDataset(train_path)
-    val_set = BeerDataset(val_path)
+    train_set = BeerDataset(train_path, aspect=args.aspect)
+    val_set = BeerDataset(val_path, aspect=args.aspect)
     print("loaded data")
 
     torch.manual_seed(0)
@@ -83,7 +83,7 @@ def main():
     hidden_dim = 500
     enc_dim = 200
 
-    if args.aspect == 'all':
+    if args.aspect == 'all' or args.aspect == 'short':
         target_dim = 3
     else: 
         target_dim = 1
