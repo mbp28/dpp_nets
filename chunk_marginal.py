@@ -14,7 +14,7 @@ from dpp_nets.layers.layers import ChunkTrainer
 
 parser = argparse.ArgumentParser(description='marginal_chunk Krause Trainer')
 
-parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all'],
+parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all', 'short'],
                     help='what is the target?', required=True)
 
 parser.add_argument('-b', '--batch-size', default=50, type=int,
