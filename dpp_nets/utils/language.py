@@ -39,8 +39,8 @@ def process_batch(nlp, vocab, embd, batch):
     MAX_CHUNK_LENGTH = 271
     MAX_CHUNK_NO = 397
 
-    #maxi = 0
-    #for review in batch['review']:
+    # maxi = 0
+    # for review in batch['review']:
      #   doc = nlp(review)
      #   rep = torch.stack(list(yield_chunk_vec(doc, vocab, embd))).squeeze()
      #   maxi = max(maxi, rep.size(0))

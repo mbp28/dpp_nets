@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(description='marginal_chunk Krause Trainer')
 parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all', 'short'],
                     help='what is the target?', required=True)
 
-parser.add_argument('-b', '--batch-size', default=50, type=int,
+parser.add_argument('-b', '--batch-size', default=100, type=int,
                     metavar='N', help='mini-batch size (default: 50)')
 parser.add_argument('--epochs', default=30, type=int, metavar='N',
                     help='number of total epochs to run')

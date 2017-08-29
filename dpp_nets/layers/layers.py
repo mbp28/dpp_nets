@@ -60,7 +60,7 @@ class KernelVar(nn.Module):
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, kernel_dim)
 
-        self.net = nn.Sequential(self.layer1, nn.ELU(), self.layer2, nn.ELU(), self.layer3)
+        self.net = nn.Sequential(self.layer1, nn.Tanh(), self.layer2, nn.Tanh(), self.layer3)
 
         self.s_ix = []
         self.e_ix = []
