@@ -70,7 +70,7 @@ def main():
     # Set up datasets and -loader
     train_set = BeerDataset(train_path, vocab)
     val_set = BeerDataset(val_path, vocab)
-    kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+    kwargs = {'num_workers': 0, 'pin_memory': True} if args.cuda else {}
 
     my_collate = custom_collate(vocab, args.cuda)
     train_loader = torch.utils.data.DataLoader(train_set, collate_fn=my_collate, batch_size=args.batch_size, shuffle=True, **kwargs)
