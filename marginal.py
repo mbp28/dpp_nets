@@ -1,130 +1,101 @@
 import argparse
 import os
 import shutil
+import nltk
 
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.data.dataloader import DataLoader
 
-from dpp_nets.utils.language import create_clean_vocabulary, BeerDataset, process_batch
-
+from dpp_nets.utils.language import Vocabulary, BeerDataset, custom_collate
 from dpp_nets.layers.layers import ChunkTrainer
 
 
 parser = argparse.ArgumentParser(description='marginal_chunk Krause Trainer')
 parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all', 'short'],
                     help='what is the target?', required=True)
+parser.add_argument('-m', '--mode', type=str, choices=['words', 'chunks', 'sents'],
+                    help='what is the mode?', required=True)
 parser.add_argument('-b', '--batch-size', default=100, type=int,
                     metavar='N', help='mini-batch size (default: 50)')
 parser.add_argument('--epochs', default=30, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('--lr_k', '--learning_rate_k', default=1e-3, type=float,
-                    metavar='LRk', help='initial learning rate for kernel net')
-parser.add_argument('--lr_p', '--learning_rate_p', default=1e-3, type=float,
-                    metavar='LRp', help='initial learning rate for pred net')
+parser.add_argument('--lr', '--learning_rate', default=1e-3, type=float,
+                    metavar='', help='initial learning rate')
 parser.add_argument('--reg', type=float, required=True,
                     metavar='reg', help='regularization constant')
 parser.add_argument('--reg_mean', type=float, required=True,
                     metavar='reg_mean', help='regularization_mean')
-parser.add_argument('--remote', type=int,
+parser.add_argument('-r', '--remote', type=int,
                     help='training locally or on cluster?', required=True)
-parser.add_argument('--data_path_local', type=str, default='/Users/Max/data/beer_reviews',
-                    help='where is the data folder locally?')
-parser.add_argument('--data_path_remote', type=str, default='/cluster/home/paulusm/data/beer_reviews',
-                    help='where is the data folder?')
-parser.add_argument('--ckp_path_local', type=str, default='/Users/Max/checkpoints/beer_reviews',
-                    help='where is the data folder locally?')
-parser.add_argument('--ckp_path_remote', type=str, default='/cluster/home/paulusm/checkpoints/beer_reviews',
-                    help='where is the data folder?')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 
 def main():
 
-    global args, lowest_loss, nlp, vocab, embd
-
-    args = parser.parse_args()
-    args.cuda = torch.cuda.is_available()
-    
-    torch.manual_seed(args.seed)
-    if args.cuda:
-        torch.cuda.manual_seed(args.seed)
-    
-    kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-
-    train_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('../data', train=True, download=True,
-                   transform=transforms.Compose([
-                       transforms.ToTensor(),
-                       transforms.Normalize((0.1307,), (0.3081,))
-                   ])),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
-
-    test_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('../data', train=False, transform=transforms.Compose([
-                       transforms.ToTensor(),
-                       transforms.Normalize((0.1307,), (0.3081,))
-                   ])),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
-
+    global vocab, args
 
     lowest_loss = 100 # arbitrary high number as upper bound for loss
 
-    ### Load data
-    if args.remote:
-        # print('training remotely')
-        train_path = os.path.join(args.data_path_remote, str.join(".",['reviews', args.aspect, 'train.txt.gz']))
-        val_path   = os.path.join(args.data_path_remote, str.join(".",['reviews', args.aspect, 'heldout.txt.gz']))
-        embd_path = os.path.join(args.data_path_remote, 'review+wiki.filtered.200.txt.gz')
-
-    else:
-        # print('training locally')
-        train_path = os.path.join(args.data_path_local, str.join(".",['reviews', args.aspect, 'train.txt.gz']))
-        val_path   = os.path.join(args.data_path_local, str.join(".",['reviews', args.aspect, 'heldout.txt.gz']))
-        embd_path = os.path.join(args.data_path_local, 'review+wiki.filtered.200.txt.gz')
-
-    nlp, vocab, embd = create_clean_vocabulary(embd_path, val_path) # actualy train_path
-    embd.weight.requires_grad = False
-
-    train_set = BeerDataset(val_path, aspect=args.aspect) # actualy train_path
-    val_set = BeerDataset(val_path, aspect=args.aspect)
-    print("loaded data")
-
+    # Check for GPU
+    args = parser.parse_args()
+    args.cuda = torch.cuda.is_available()
+    
+    # Set Seed
     torch.manual_seed(args.seed)
-    train_loader = DataLoader(train_set, args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, args.batch_size)
-    print("loader defined")
+    if args.cuda:
+        torch.cuda.manual_seed(args.seed)
 
-    ### Build model
+    # Set-up data
+    if args.remote:
+        train_path = '/home/paulusm/data/beer_reviews/' + 'reviews.' + args.aspect + '.train.' + args.mode + '.txt.gz'
+        val_path = '/home/paulusm/data/beer_reviews/' + 'reviews.' + args.aspect + '.heldout.' + args.mode + '.txt.gz'
+        embd_path = '/home/paulusm/data/beer_reviews/' + 'review+wiki.filtered.200.txt.gz'
+        word_path = '/home/paulusm/data/beer_reviews/' + 'reviews.' + args.aspect + '.train.' + 'words.txt.gz'
+    else:
+        train_path = '/Users/Max/data/beer_reviews/' + 'reviews.' + args.aspect + '.train.' + args.mode + '.txt.gz'
+        val_path = '/Users/Max/data/beer_reviews/' + 'reviews.' + args.aspect + '.heldout.' + args.mode + '.txt.gz'
+        embd_path = '/Users/Max/data/beer_reviews/' + 'review+wiki.filtered.200.txt.gz'
+        word_path = '/Users/Max/data/beer_reviews/' + 'reviews.' + args.aspect + '.train.' + 'words.txt.gz'
+
+    # Set-up vocabulary
+    vocab = Vocabulary()
+    vocab.loadPretrained(embd_path)
+    vocab.setStops()
+    vocab.loadCorpus(word_path)
+    vocab.updateEmbedding()
+    vocab.setCuda(args.cuda)
+
+    # Set up datasets and -loader
+    train_set = BeerDataset(train_path, vocab)
+    val_set = BeerDataset(val_path, vocab)
+    kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+
+    my_collate = custom_collate(vocab, args.cuda)
+    train_loader = torch.utils.data.DataLoader(train_set, collate_fn=my_collate, batch_size=args.batch_size, shuffle=True, **kwargs)
+    val_loader = torch.utils.data.DataLoader(train_set, collate_fn=my_collate, batch_size=args.batch_size, **kwargs)
+
     # Network parameters
-    embd_dim = embd.weight.size(1)
-    kernel_dim = 200
-    hidden_dim = 500
-    enc_dim = 200
+    EMBD_DIM = 200
+    KERNEL_DIM = 200
+    HIDDEN_DIM = 500
+    ENC_DIM = 200
+    TARGET_DIM = 3 if args.aspect in set(['all', 'short']) else 1
 
-    if args.aspect == 'all' or args.aspect == 'short':
-        target_dim = 3
-    else: 
-        target_dim = 1
-
-    # Model
-    torch.manual_seed(0)
-    trainer = ChunkTrainer(embd_dim, hidden_dim, kernel_dim, enc_dim, target_dim)
+    # Conventional trainer
+    trainer = ChunkTrainer(EMBD_DIM, HIDDEN_DIM, KERNEL_DIM, ENC_DIM, TARGET_DIM)
     trainer.activation = nn.Sigmoid()
     trainer.reg = args.reg
     trainer.reg_mean = args.reg_mean
+
     print("created trainer")
 
-    # Set-up Training
-    params = [{'params': trainer.kernel_net.parameters(), 'lr': args.lr_k},
-              {'params': trainer.pred_net.parameters(),   'lr': args.lr_p}]
-    optimizer = torch.optim.Adam(params)
-    print('set-up optimizer')
+    # Set-up optimizer
+    params = [{'params': vocab.EmbeddingBag.parameters()}, {'params': trainer.parameters()}]
+    optimizer = torch.optim.Adam(params, lr=args.lr)
 
     ### Loop
-    torch.manual_seed(0)
-    print("started loop")
     for epoch in range(args.epochs):
 
         adjust_learning_rate(optimizer, epoch)
@@ -154,8 +125,9 @@ def train(loader, trainer, optimizer):
 
     for t, batch in enumerate(loader):
 
-        review, target = process_batch(nlp, vocab, embd, batch)
-        loss  = trainer(review, target)
+        reviews, target = batch
+
+        loss  = trainer(reviews, target)
         
         optimizer.zero_grad()
         loss.backward()
@@ -172,7 +144,7 @@ def validate(loader, trainer):
 
     for i, batch in enumerate(loader, 1):
 
-        review, target = process_batch(nlp, vocab, embd, batch)
+        review, target = batch
 
         trainer(review, target)
 
@@ -204,11 +176,10 @@ def log(epoch, loss, pred_loss, reg_loss):
                               'V Pred Loss: %.5f' % (pred_loss), 'V Reg Loss: %.5f' % (reg_loss)])
 
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
-            'lr' + str(args.lr_k) + str(args.lr_p) + 'marginal_chunk_log.txt')
+        destination = '/home/paulusm/checkpoints/beer_reviews/' + str(args.aspect) + str(args.mode) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) +  'log_marginal.txt'
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
-            'lr' + str(args.lr_k) + str(args.lr_p) + 'marginal_chunk_log.txt')
+        destination = '/Users/Max/checkpoints/beer_reviews/' + str(args.aspect) + str(args.mode) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) +  'log_marginal.txt'
+
 
     with open(destination, 'a') as log:
         log.write(string + '\n')
@@ -218,22 +189,18 @@ def save_checkpoint(state, is_best, filename='marginal_chunk_checkpoint.pth.tar'
     State is a dictionary that cotains valuable information to be saved.
     """
     if args.remote:
-        destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
-            'lr' + str(args.lr_k) + str(args.lr_p) + filename)
+        destination = '/home/paulusm/checkpoints/beer_reviews/' + str(args.aspect) + str(args.mode) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + 'marginal_ckp.pth.tar'
     else:
-        destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
-            'lr' + str(args.lr_k) + str(args.lr_p) + filename)
-    
+        destination = '/Users/Max/checkpoints/beer_reviews/' + str(args.aspect) + str(args.mode) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) +  'marginal_ckp.pth.tar'
+
     torch.save(state, destination)
 
     if is_best:
         if args.remote:
-            best_destination = os.path.join(args.ckp_path_remote, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 
-                'lr' + str(args.lr_k) + str(args.lr_p) + 'marginal_chunk_best.pth.tar')
+            best_destination = '/home/paulusm/checkpoints/beer_reviews/' + str(args.aspect) + str(args.mode) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + 'marginal_best_ckp.pth.tar'
         else:
-            best_destination = os.path.join(args.ckp_path_local, args.aspect + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) +  
-                'lr' + str(args.lr_k) + str(args.lr_p) + 'marginal_chunk_best.pth.tar')
-        
+            best_destination = '/Users/Max/checkpoints/beer_reviews/' + str(args.aspect) + str(args.mode) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + 'marginal_best_ckp.pth.tar'
+
         shutil.copyfile(destination, best_destination)
 
 if __name__ == '__main__':

@@ -4,200 +4,249 @@ import string
 import spacy
 import torch 
 import torch.nn as nn
+import nltk 
 
 from collections import OrderedDict
 from torch.utils.data import Dataset
 from dpp_nets.my_torch.utilities import pad_tensor
 from torch.autograd import Variable
 
-def filter_stops(tree, vocab):
-    return (token.text for token in tree if not token.is_stop and token.text in vocab.word2index)
-
-def yield_chunks(doc, vocab, MAX_CHUNK_LENGTH):
-    seen = set()
-    for token in doc:
-        t = tuple((filter_stops(token.subtree, vocab)))
-        if t and t not in seen:
-            seen.add(t)
-            #ixs = [vocab.word2index[word] if word in vocab.word2index else print(word) for word in t]
-            ixs = torch.LongTensor([vocab.word2index[word] for word in t])
-            ixs = pad_tensor(ixs,0,0,MAX_CHUNK_LENGTH)
-            yield ixs
-
-def yield_chunk_vec(doc, vocab, embd):
-    seen = set()
-    for token in doc:
-        t = tuple((filter_stops(token.subtree, vocab)))
-        if t and t not in seen:
-            seen.add(t)
-            ixs = torch.LongTensor([vocab.word2index[word] for word in t])
-            embd_mat = embd(Variable(ixs)).mean(0)
-            yield embd_mat
-
-def process_batch(nlp, vocab, embd, batch):
-
-    MAX_CHUNK_LENGTH = 271
-    MAX_CHUNK_NO = 397
-
-    # maxi = 0
-    # for review in batch['review']:
-     #   doc = nlp(review)
-     #   rep = torch.stack(list(yield_chunk_vec(doc, vocab, embd))).squeeze()
-     #   maxi = max(maxi, rep.size(0))
-
-    reps = []
-    for review in batch['review']:
-        doc = nlp(review)
-        rep = torch.stack(list(yield_chunk_vec(doc, vocab, embd))).squeeze()
-        rep = torch.cat([rep, Variable(torch.zeros(MAX_CHUNK_NO + 1 - rep.size(0), rep.size(1)))], dim=0)
-        reps.append(rep)
-
-    data_tensor =  torch.stack(reps)
-    target_tensor = Variable(torch.stack(batch['target']).t().float())
-    
-    return data_tensor, target_tensor
-
-def yield_sen_vec(doc, vocab, embd):
-    seen = set()
-    for s in doc.sents:
-        t = tuple((filter_stops(s, vocab)))
-        if t and t not in seen:
-            seen.add(t)
-            ixs = torch.LongTensor([vocab.word2index[word] for word in t])
-            embd_mat = embd(Variable(ixs)).mean(0)
-            yield embd_mat
-
-def process_batch_sens(nlp, vocab, embd, batch):
-
-    MAX_CHUNK_LENGTH = 271
-    MAX_SENS_NO = 105
-
-    # maxi = 0
-    # for review in batch['review']:
-     #   doc = nlp(review)
-     #   rep = torch.stack(list(yield_chunk_vec(doc, vocab, embd))).squeeze()
-     #   maxi = max(maxi, rep.size(0))
-
-    reps = []
-    for review in batch['review']:
-        doc = nlp(review)
-        rep = torch.stack(list(yield_sen_vec(doc, vocab, embd))).squeeze(1)
-        rep = torch.cat([rep, Variable(torch.zeros(MAX_SENS_NO + 1 - rep.size(0),rep.size(1)))],dim=0)
-        reps.append(rep)
-
-    data_tensor =  torch.stack(reps)
-    target_tensor = Variable(torch.stack(batch['target']).t().float())
-    
-    return data_tensor, target_tensor
-
-
 class Vocabulary:
     
     def __init__(self):
+        
+        # Basic Indexing
         self.word2index = {}
-        self.word2count = {}
         self.index2word = {}
+        
+        # Keeping track of vocabulary
+        self.vocab_size = 0 
+        self.word2count = {}
+        
+        # Vector Dictionaries
+        self.pretrained = {}
+        self.random = {}
         self.word2vec = {}
         self.index2vec = {}
+
+        # Set of Stop Words
+        self.stop_words = set()
         
-        self.vocab_size = 0  # Count SOS and EOS
+        self.Embedding = None
+        self.EmbeddingBag = None
+
+        self.cuda = False
+    
+    def setStops(self):
         
-    def load_pretrained(self, embd_path):
+        self.stop_words = set(nltk.corpus.stopwords.words('english'))
+        make_stops = set(string.punctuation + '\n' + '\t' + '...')
+        unmake_stops = set(('no', 'not'))
+
+        self.stop_words = self.stop_words.union(make_stops)
+        self.stop_words = self.stop_words.difference(unmake_stops)      
         
-        # Create dictionaries
-        for ix, (word, vec) in enumerate(self.embd_iterator(embd_path)):
-            
-            self.vocab_size += 1            
-            self.word2index[word] = self.vocab_size
-            self.word2count[word] = 1
-            self.index2word[self.vocab_size] = word
-            self.word2vec[word] = vec
-            self.index2vec[self.vocab_size] = vec
+    def loadPretrained(self, embd_path):
         
-    def embd_iterator(self, embd_path):
+        self.pretrained = {}
         with gzip.open(embd_path, 'rt') as f:
             for line in f:
                 line = line.strip()
                 if line:
-                    parts = line.split()
-                    word = parts[0]
-                    embd = np.array([float(x) for x in parts[1:]])
-                    yield word, embd   
+                    word, *embd = line.split()
+                    vec = torch.FloatTensor([float(dim) for dim in embd])            
+                    self.pretrained[word]  = vec
                     
-    def addLofSentences(self, lofsentences):
+    def loadCorpus(self, word_path):
+        
+        with gzip.open(word_path, 'rt') as f:
 
-        for sentence in lofsentences:
-            self.addSentence(sentence)
+            for line in f:
+                _, review = line.split('\D')
+                review = tuple(tuple(chunk.split('\W')) for chunk in review.split('\T'))
 
-    def addSentence(self, sentence):
+                for words in review:
+                    self.addWords(words)
+            
+    def addWords(self, words):
         """
-        sentence is a list of words
+        words: seq containing variable no of words
         """
-        for word in sentence:
+        for word in words:
             self.addWord(word)
 
     def addWord(self, word):
+
         if word not in self.word2index:
-            pass
-            # self.vocab_size += 1
-            # self.word2count[word] = 1
-            # self.word2index[word] = self.vocab_size
-            # self.index2word[self.vocab_size] = word
-            # Create random normal vector
-            # vec = np.random.normal(size=200)
-            # self.word2vec[word] = vec
-            # self.index2vec[self.vocab_size] = vec            
+            
+            # Keeping track of vocabulary
+            self.vocab_size += 1
+            self.word2count[word] = 1
+            
+            # Basic Indexing
+            self.word2index[word] = self.vocab_size
+            self.index2word[self.vocab_size] = word
+            
+            # Add word vector
+            if word in self.pretrained:
+                vec = self.pretrained[word]
+                self.word2vec[word] = vec
+                self.index2vec[self.vocab_size] = vec
+                
+            else:
+                vec = torch.randn(200)
+                self.random[word] = vec
+                self.word2vec[word] = vec
+                self.index2vec[self.vocab_size] = vec
         else:
             self.word2count[word] += 1
-
-
-def create_clean_vocabulary(embd_path, data_path):
+            
+    def updateEmbedding(self):
+        
+        vocab_size = len(self.index2vec) + 1
+        EMBD_DIM = 200
+        
+        self.Embedding = nn.Embedding(vocab_size, EMBD_DIM, padding_idx=0)
+        self.EmbeddingBag = nn.EmbeddingBag(vocab_size, EMBD_DIM)
+        embd_matrix = torch.zeros(vocab_size, EMBD_DIM)
+        
+        for ix, vec in self.index2vec.items():
+            embd_matrix[ix] = vec
+        
+        embd_dict = OrderedDict([('weight', embd_matrix)])
+        self.Embedding.load_state_dict(embd_dict)
+        self.EmbeddingBag.load_state_dict(embd_dict)
     
-    vocab = Vocabulary()
-    vocab.load_pretrained(embd_path)
-    MIN_WORD_OCCURENCE = 10
-    EMBD_DIM = 200
+    def checkWord(self, word, min_count):
 
-    # Create random word vectors for words that are missing
-    with gzip.open(data_path, 'rt') as f:
-        for line in f:
-            target, sep, review = line.partition("\t")
-            review, target = review.split(), target.split()
-            if len(review):
-                vocab.addSentence(review)
+        if word not in self.stop_words and word in self.word2index and self.word2index[word] > min_count:
+            return word
+            
+    def filterReview(self, review):
+        """
+        review should be like our data set
+        """
+        f_review = []
+        seen = set()
+        
+        for tup in review:
+            f_tuple = []
+            
+            for word in tup:
+                word = self.checkWord(word, 10)
+                if word:
+                    f_tuple.append(word)
+            
+            f_tuple = tuple(f_tuple)    
+            
+            if f_tuple and f_tuple not in seen:
+                seen.add(f_tuple)
+                f_review.append(f_tuple)
+                
+        return f_review
+    
+    def mapIndicesBatch(self, reviews):
+        
+        f_review = []
+        offset = []
+        i = 0
 
-    # Use spacy
-    nlp = spacy.load('en')
+        for review in reviews:
+            seen = set()
+            
+            for tup in review: 
+                f_tuple = []
+                
+                for word in tup:
+                    word = self.checkWord(word, 10)
+                    if word:
+                        f_tuple.append(word)
 
-    # Re-define stop words
-    nlp.vocab["not"].is_stop = False
-    nlp.vocab["no"].is_stop = False
-    nlp.vocab['...'].is_stop = True
-    nlp.vocab["\n"].is_stop = True
-    nlp.vocab["\t"].is_stop = True
-    for symbol in list(string.punctuation):
-        nlp.vocab[symbol].is_stop = True
+                f_tuple = tuple(f_tuple)    
 
-    for word, count in vocab.word2count.items():
-        if count < 10:
-            nlp.vocab[word].is_stop = True
+                if f_tuple and f_tuple not in seen:
+                    seen.add(f_tuple)
+                    f_review.extend([self.word2index[word] for word in f_tuple])
+                    offset.append(i)
+                    i += len(f_tuple)
+            
+        f_review, offset = torch.LongTensor(f_review), torch.LongTensor(offset)   
+        return f_review, offset
+    
+    def mapIndices(self, review):
+        
+        f_review = []
+        offset = []
+        seen = set()
+        i = 0
 
-    # Create an embedding
-    embd_matrix = torch.zeros(len(vocab.index2vec) + 1, EMBD_DIM)    
-    for ix, vec in vocab.index2vec.items():
-        embd_matrix[ix] = torch.FloatTensor(vec)
+        for tup in review:
+            f_tuple = []
 
-    embd_dict = OrderedDict([('weight', embd_matrix)])
-    embd = nn.Embedding(len(vocab.index2vec) + 1, EMBD_DIM, padding_idx=0)
-    embd.load_state_dict(embd_dict)
+            for word in tup:
+                word = self.checkWord(word, 10)
+                if word:
+                    f_tuple.append(word)
 
+            f_tuple = tuple(f_tuple)    
 
-    return nlp, vocab, embd
+            if f_tuple and f_tuple not in seen:
+                seen.add(f_tuple)
+                f_review.extend([self.word2index[word] for word in f_tuple])
+                offset.append(i)
+                i += len(f_tuple)
+
+        f_review, offset = torch.LongTensor(f_review), torch.LongTensor(offset)   
+        return f_review, offset
+    
+    def returnEmbds(self, review):
+        
+        f_review = []
+        offset = []
+        seen = set()
+        i = 0
+
+        for tup in review:
+            f_tuple = []
+
+            for word in tup:
+                word = self.checkWord(word, 10)
+                if word:
+                    f_tuple.append(word)
+
+            f_tuple = tuple(f_tuple)    
+
+            if f_tuple and f_tuple not in seen:
+                seen.add(f_tuple)
+                f_review.extend([self.word2index[word] for word in f_tuple])
+                offset.append(i)
+                i += len(f_tuple)
+
+        
+        if self.cuda: 
+            f_review, offset = Variable(torch.cuda.LongTensor(f_review)), Variable(torch.cuda.LongTensor(offset))
+
+        else:
+            f_review, offset = Variable(torch.LongTensor(f_review)), Variable(torch.LongTensor(offset))
+
+        embd = self.EmbeddingBag(f_review, offset)
+
+        return embd
+
+    def setCuda(self, Yes=True):
+
+        if Yes:
+            self.cuda = True
+            self.EmbeddingBag.cuda()
+        else:
+            self.cuda = False
+            self.EmbeddingBag.float()
+
 
 class BeerDataset(Dataset):
     """BeerDataset."""
 
-    def __init__(self, data_path, aspect='all', transform=None):
+    def __init__(self, data_path, aspect='all'):
         
         # Compute size of the data set      
         self.aspect = aspect
@@ -210,19 +259,49 @@ class BeerDataset(Dataset):
 
     def __getitem__(self, idx):
         
-        target, sep, review = self.lines[idx].partition('\t')
-
-        target = tuple(float(t) for t in target.split())
+        # Decode
+        target, review = self.lines[idx].split('\D')
         
-        if self.aspect == 'aspect 1':
-            target = target[0]
-        elif self.aspect == 'aspect 2':
-            target = target[1]
-        elif self.aspect == 'aspect 3':
-            target = target[2]
-        else:
-            target = target[:3]
-            
+        # Target
+        target = torch.FloatTensor([float(t) for t in target.split()[:3]])
+        
+        # Review
+        review = tuple(tuple(chunk.split('\W')) for chunk in review.split('\T'))
+        #ixs, offset = self.vocab.mapIndices(review)
+        
+        #sample = {'ixs': ixs, 'offset': offset, 'target': target}
         sample = {'review': review, 'target': target}
-
+        
         return sample
+
+def custom_collate(vocab, cuda=False):
+
+    def collate(batch):
+
+        # Count sizes - no tensor operations
+        max_no_chunks = 0
+        for d in batch:
+            max_no_chunks = max(max_no_chunks, len(vocab.filterReview(d['review'])))
+        
+        # Map to Embeddings
+        reps = []
+        for d in batch:
+            rep = vocab.returnEmbds(d['review'])
+            if cuda:
+                rep = torch.cat([rep, Variable(torch.zeros(max_no_chunks + 1 - rep.size(0), rep.size(1))).cuda()], dim=0)
+            else:
+                rep = torch.cat([rep, Variable(torch.zeros(max_no_chunks + 1 - rep.size(0), rep.size(1)))], dim=0)
+            reps.append(rep)
+        
+        data_tensor = torch.stack(reps) 
+        
+        # Create target vector
+        # target_tensor = Variable(torch.stack([d['target'] for d in batch]))
+        if cuda: 
+            target_tensor = Variable(torch.stack([d['target'] for d in batch]).cuda())
+        else:
+            target_tensor = Variable(torch.stack([d['target'] for d in batch]))
+        
+        return data_tensor, target_tensor
+
+    return collate
