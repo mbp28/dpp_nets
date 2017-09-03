@@ -23,7 +23,7 @@ parser.add_argument('--epochs', default=30, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--lr_k', '--learning_rate_k', default=1e-3, type=float,
                     metavar='LRk', help='initial learning rate for kernel net')
-parser.add_argument('--lr_p', '--learning_rate_p', default=1e-4, type=float,
+parser.add_argument('--lr_p', '--learning_rate_p', default=1e-3, type=float,
                     metavar='LRp', help='initial learning rate for pred net')
 parser.add_argument('--reg', type=float, required=True,
                     metavar='reg', help='regularization constant')

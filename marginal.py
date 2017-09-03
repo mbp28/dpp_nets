@@ -13,10 +13,8 @@ from dpp_nets.layers.layers import ChunkTrainer
 
 
 parser = argparse.ArgumentParser(description='marginal_chunk Krause Trainer')
-
 parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all', 'short'],
                     help='what is the target?', required=True)
-
 parser.add_argument('-b', '--batch-size', default=100, type=int,
                     metavar='N', help='mini-batch size (default: 50)')
 parser.add_argument('--epochs', default=30, type=int, metavar='N',
@@ -29,11 +27,8 @@ parser.add_argument('--reg', type=float, required=True,
                     metavar='reg', help='regularization constant')
 parser.add_argument('--reg_mean', type=float, required=True,
                     metavar='reg_mean', help='regularization_mean')
-
-# Train locally or remotely?
 parser.add_argument('--remote', type=int,
                     help='training locally or on cluster?', required=True)
-# Burnt in Paths..
 parser.add_argument('--data_path_local', type=str, default='/Users/Max/data/beer_reviews',
                     help='where is the data folder locally?')
 parser.add_argument('--data_path_remote', type=str, default='/cluster/home/paulusm/data/beer_reviews',
@@ -42,13 +37,38 @@ parser.add_argument('--ckp_path_local', type=str, default='/Users/Max/checkpoint
                     help='where is the data folder locally?')
 parser.add_argument('--ckp_path_remote', type=str, default='/cluster/home/paulusm/checkpoints/beer_reviews',
                     help='where is the data folder?')
-
+parser.add_argument('--seed', type=int, default=1, metavar='S',
+                    help='random seed (default: 1)')
 
 def main():
 
     global args, lowest_loss, nlp, vocab, embd
 
     args = parser.parse_args()
+    args.cuda = torch.cuda.is_available()
+    
+    torch.manual_seed(args.seed)
+    if args.cuda:
+        torch.cuda.manual_seed(args.seed)
+    
+    kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+
+    train_loader = torch.utils.data.DataLoader(
+        datasets.MNIST('../data', train=True, download=True,
+                   transform=transforms.Compose([
+                       transforms.ToTensor(),
+                       transforms.Normalize((0.1307,), (0.3081,))
+                   ])),
+        batch_size=args.batch_size, shuffle=True, **kwargs)
+
+    test_loader = torch.utils.data.DataLoader(
+        datasets.MNIST('../data', train=False, transform=transforms.Compose([
+                       transforms.ToTensor(),
+                       transforms.Normalize((0.1307,), (0.3081,))
+                   ])),
+        batch_size=args.batch_size, shuffle=True, **kwargs)
+
+
     lowest_loss = 100 # arbitrary high number as upper bound for loss
 
     ### Load data
@@ -71,7 +91,7 @@ def main():
     val_set = BeerDataset(val_path, aspect=args.aspect)
     print("loaded data")
 
-    torch.manual_seed(0)
+    torch.manual_seed(args.seed)
     train_loader = DataLoader(train_set, args.batch_size, shuffle=True)
     val_loader = DataLoader(val_set, args.batch_size)
     print("loader defined")

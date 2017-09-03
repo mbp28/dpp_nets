@@ -35,7 +35,7 @@ class KernelFixed(nn.Module):
         """
 
         batch_size, set_size, embd_dim = words.size()
-        context = words.mean(1).expand_as(words)
+        context = words.mean(1, keepdim=True).expand_as(words)
         batch_x = torch.cat([words, context], dim = 2).view(-1, 2 * embd_dim)
 
         batch_kernel = self.net(batch_x)
@@ -75,11 +75,11 @@ class KernelVar(nn.Module):
         batch_size, max_set_size, embd_dim = words.size()
 
         # Create context
-        lengths = words.sum(2).abs().sign().sum(1)
-        context = (words.sum(1) / lengths.expand_as(words.sum(1))).expand_as(words)
+        lengths = words.sum(2, keepdim=True).abs().sign().sum(1, keepdim=True)
+        context = (words.sum(1, keepdim=True) / lengths.expand_as(words.sum(1, keepdim=True))).expand_as(words)
 
         # Filter out zero words 
-        mask = words.data.sum(2).abs().sign().expand_as(words).byte()
+        mask = words.data.sum(2, keepdim=True).abs().sign().expand_as(words).byte()
         words = words.masked_select(Variable(mask)).view(-1, embd_dim)
         context = context.masked_select(Variable(mask)).view(-1, embd_dim)
 
@@ -137,7 +137,7 @@ class DeepSetPred(nn.Module):
 
         for i, word_samples in enumerate(word_picks):
             for words in word_samples:
-                enc = self.enc_net(words).sum(0)
+                enc = self.enc_net(words).sum(0, keepdim=True)
                 encodings[i].append(enc)
 
         encodings = torch.stack([torch.stack(enc_samples) for enc_samples in encodings]).squeeze()
@@ -247,7 +247,7 @@ class custom_backprop(object):
         batch_size, alpha_iter, target_dim = pred.size()
         target = target.unsqueeze(1).expand_as(pred)
 
-        losses = (pred - target).pow(2).mean(2)
+        losses = (pred - target).pow(2).mean(2, keepdim=True)
         self.saved_losses = [[i.data[0] for i in row] for row in losses]
         self.saved_baselines = [compute_baseline(i) for i in self.saved_losses]
 
@@ -316,12 +316,12 @@ class DeepSetBaseline(nn.Module):
 
         # Unpacking to send through encoder network
         # Register indices of individual instances in batch for reconstruction
-        lengths = words.data.sum(2).abs().sign().sum(1)
+        lengths = words.data.sum(2, keepdim=True).abs().sign().sum(1, keepdim=True)
         s_ix = list(lengths.squeeze().cumsum(0).long() - lengths.squeeze().long())
         e_ix = list(lengths.squeeze().cumsum(0).long())
 
         # Filter out zero words 
-        mask = words.data.sum(2).abs().sign().expand_as(words).byte()
+        mask = words.data.sum(2, keepdim=True).abs().sign().expand_as(words).byte()
         words = words.masked_select(Variable(mask)).view(-1, embd_dim)
 
         # Send through encoder network
@@ -332,7 +332,7 @@ class DeepSetBaseline(nn.Module):
         codes = []
 
         for i, (s, e) in enumerate(zip(s_ix, e_ix)):
-            code = enc_words[s:e].sum(0)
+            code = enc_words[s:e].sum(0, keepdim=True)
             codes.append(code)
 
         codes = torch.stack(codes).squeeze(1)
@@ -509,7 +509,7 @@ class PredNet(nn.Module):
         
         codes = []
         for i, (s, e) in enumerate(zip(s_ix, e_ix)):
-            code = enc_words[s:e].sum(0)
+            code = enc_words[s:e].sum(0, keepdim=True)
             codes.append(code)
 
         codes = torch.stack(codes).squeeze(1)
@@ -652,7 +652,7 @@ class ReinforceTrainer(nn.Module):
             self.loss = self.pred_loss
 
         # add computation of baselines and registering reawards here!!
-        losses = (self.pred - target).pow(2).view(batch_size, alpha_iter, target_dim).mean(2)
+        losses = (self.pred - target).pow(2).view(batch_size, alpha_iter, target_dim).mean(2, keepdim=True)
 
         self.saved_losses = [[i.data[0] for i in row] for row in losses]
         if self.alpha_iter > 1:
@@ -773,6 +773,3 @@ class ChunkTrainer(nn.Module):
 # c) REINFORCE trainer
 # --> think about which settings to change - regularization_mean + lr probably
 # submit to EULER and start installing directory on LAS group. 
-
-
-

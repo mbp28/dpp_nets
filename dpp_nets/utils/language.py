@@ -49,7 +49,7 @@ def process_batch(nlp, vocab, embd, batch):
     for review in batch['review']:
         doc = nlp(review)
         rep = torch.stack(list(yield_chunk_vec(doc, vocab, embd))).squeeze()
-        rep = torch.cat([rep, Variable(torch.zeros(MAX_CHUNK_NO + 1 - rep.size(0),rep.size(1)))],dim=0)
+        rep = torch.cat([rep, Variable(torch.zeros(MAX_CHUNK_NO + 1 - rep.size(0), rep.size(1)))], dim=0)
         reps.append(rep)
 
     data_tensor =  torch.stack(reps)

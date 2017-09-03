@@ -105,7 +105,7 @@ class DPP(StochasticFunction):
                 while subset.sum() < k:
 
                     # Sample an item
-                    probs = V.pow(2).sum(1).t()
+                    probs = V.pow(2).sum(1, keepdim=True).t()
                     item = probs.multinomial(1)[0,0]
                     subset[item] = 1
                     
@@ -226,7 +226,7 @@ class AllInOne(StochasticFunction):
                 while subset.sum() < k:
 
                     # Sample an item
-                    probs = V.pow(2).sum(1).t()
+                    probs = V.pow(2).sum(1, keepdim=True).t()
                     item = probs.multinomial(1)[0,0]
                     subset[item] = 1
                     
