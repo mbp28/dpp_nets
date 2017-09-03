@@ -88,7 +88,8 @@ def main():
     trainer.activation = nn.Sigmoid()
     trainer.reg = args.reg
     trainer.reg_mean = args.reg_mean
-
+    if args.cuda:
+        trainer.cuda()
     print("created trainer")
 
     # Set-up optimizer
