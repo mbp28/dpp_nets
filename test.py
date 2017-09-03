@@ -66,6 +66,7 @@ def main():
     vocab.loadCorpus(word_path)
     vocab.updateEmbedding()
     vocab.setCuda(args.cuda)
+    print('set up vocabulary')
 
     # Set up datasets and -loader
     train_set = BeerDataset(train_path, vocab)
