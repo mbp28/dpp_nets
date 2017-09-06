@@ -12,7 +12,7 @@ from dpp_nets.utils.language import Vocabulary, BeerDataset, custom_collate
 from dpp_nets.layers.layers import ChunkTrainer
 
 
-parser = argparse.ArgumentParser(description='marginal_chunk Krause Trainer')
+parser = argparse.ArgumentParser(description='Evaluation')
 parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all', 'short'],
                     help='what is the target?', required=True)
 parser.add_argument('-m', '--mode', type=str, choices=['words', 'chunks', 'sents'],

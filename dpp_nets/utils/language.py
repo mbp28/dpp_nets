@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import nltk 
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from torch.utils.data import Dataset
 from dpp_nets.my_torch.utilities import pad_tensor
 from torch.autograd import Variable
@@ -144,7 +144,33 @@ class Vocabulary:
                 f_review.append(f_tuple)
                 
         return f_review
-    
+
+    def createDicts(self, defdict):
+        """
+        sentences is a list of tuples that contain 
+        0: spacy sentence
+        1: set of label(s)
+        """
+        newdict = defaultdict(set)
+        reverse_dict = defaultdict(list)
+
+        for tup, label in defdict.items():
+            
+            f_tuple = []
+
+            for word in tup:
+                word = self.checkWord(word, 10)
+                if word:
+                    f_tuple.append(word)
+            
+            f_tuple = tuple(f_tuple)    
+            
+            if f_tuple: 
+                newdict[f_tuple].update(*label)
+                reverse_dict[f_tuple].append(tup)
+                
+        return newdict, reverse_dict
+
     def mapIndicesBatch(self, reviews):
         
         f_review = []
@@ -280,6 +306,7 @@ def custom_collate(vocab, cuda=False):
 
         # Count sizes - no tensor operations
         max_no_chunks = 0
+        
         for d in batch:
             max_no_chunks = max(max_no_chunks, len(vocab.filterReview(d['review'])))
         
