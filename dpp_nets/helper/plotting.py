@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+
 import matplotlib.pyplot as plt
 from collections import defaultdict
 
@@ -34,6 +35,7 @@ def plot_floats(my_def_dict, ma=0, fname=None, title="Untitled", xlabel="Unlabel
     plt.show()
 
 def plot_defaultdict(my_def_dict, ma=0, fname=None, title="Untitled", xlabel="Unlabelled", ylabel="Unlabelled"):
+
 	my_dict = {k: torch.stack(v) for k, v in my_def_dict.items()}
 	plot_dict(my_dict, ma, fname, title, xlabel, ylabel)
 

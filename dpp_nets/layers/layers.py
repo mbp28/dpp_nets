@@ -24,7 +24,7 @@ class KernelFixed(nn.Module):
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, kernel_dim)
 
-        self.net = nn.Sequential(self.layer1, nn.Tanh(), self.layer2, nn.Tanh(), self.layer3)
+        self.net = nn.Sequential(self.layer1, nn.ReLU(), self.layer2, nn.ReLU(), self.layer3)
 
 
     def forward(self, words):
@@ -60,10 +60,12 @@ class KernelVar(nn.Module):
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, kernel_dim)
 
-        self.net = nn.Sequential(self.layer1, nn.Tanh(), self.layer2, nn.Tanh(), self.layer3)
+        self.net = nn.Sequential(self.layer1, nn.ReLU(), self.layer2, nn.ReLU(), self.layer3)
 
         self.s_ix = []
         self.e_ix = []
+
+        self.lengths = None
 
 
     def forward(self, words):
@@ -75,8 +77,8 @@ class KernelVar(nn.Module):
         batch_size, max_set_size, embd_dim = words.size()
 
         # Create context
-        lengths = words.sum(2, keepdim=True).abs().sign().sum(1, keepdim=True)
-        context = (words.sum(1, keepdim=True) / lengths.expand_as(words.sum(1, keepdim=True))).expand_as(words)
+        self.lengths = words.sum(2, keepdim=True).abs().sign().sum(1, keepdim=True)
+        context = (words.sum(1, keepdim=True) / self.lengths.expand_as(words.sum(1, keepdim=True))).expand_as(words)
 
         # Filter out zero words 
         mask = words.data.sum(2, keepdim=True).abs().sign().expand_as(words).byte()
@@ -88,10 +90,10 @@ class KernelVar(nn.Module):
         batch_kernel = self.net(batch_x)
 
         # Register indices for individual kernels
-        self.s_ix = list(lengths.squeeze().cumsum(0).long().data - lengths.squeeze().long().data)
-        self.e_ix = list(lengths.squeeze().cumsum(0).long().data)
+        self.s_ix = list(self.lengths.squeeze().cumsum(0).long().data - self.lengths.squeeze().long().data)
+        self.e_ix = list(self.lengths.squeeze().cumsum(0).long().data)
 
-        return batch_kernel , words 
+        return batch_kernel, words 
 
 class DeepSetPred(nn.Module):
 
@@ -108,7 +110,7 @@ class DeepSetPred(nn.Module):
         self.enc_layer1 = nn.Linear(embd_dim, hidden_dim)
         self.enc_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
-        self.enc_net = nn.Sequential(self.enc_layer1, nn.Tanh(), self.enc_layer2, nn.Tanh(), self.enc_layer3)
+        self.enc_net = nn.Sequential(self.enc_layer1, nn.ReLU(), self.enc_layer2, nn.ReLU(), self.enc_layer3)
 
         self.batch_norm = nn.BatchNorm1d(enc_dim)
 
@@ -116,7 +118,7 @@ class DeepSetPred(nn.Module):
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.pred_layer3 = nn.Linear(hidden_dim, target_dim)
-        self.pred_net = nn.Sequential(self.pred_layer1, nn.Tanh(), self.pred_layer2, nn.Tanh(), self.pred_layer3)
+        self.pred_net = nn.Sequential(self.pred_layer1, nn.ReLU(), self.pred_layer2, nn.ReLU(), self.pred_layer3)
 
     def forward(self, word_picks):
         """
@@ -415,13 +417,13 @@ class PredNet(nn.Module):
         self.enc_layer1 = nn.Linear(embd_dim, hidden_dim)
         self.enc_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.enc_layer3 = nn.Linear(hidden_dim, enc_dim)
-        self.enc_net = nn.Sequential(self.enc_layer1, nn.Tanh(), self.enc_layer2, nn.Tanh(), self.enc_layer3)
+        self.enc_net = nn.Sequential(self.enc_layer1, nn.ReLU(), self.enc_layer2, nn.ReLU(), self.enc_layer3)
 
         # Uses the sum of the encoded vectors to make a final prediction
         self.pred_layer1 = nn.Linear(enc_dim ,hidden_dim)
         self.pred_layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.pred_layer3 = nn.Linear(hidden_dim, target_dim)
-        self.pred_net = nn.Sequential(self.pred_layer1, nn.Tanh(), self.pred_layer2, nn.Tanh(), self.pred_layer3)
+        self.pred_net = nn.Sequential(self.pred_layer1, nn.ReLU(), self.pred_layer2, nn.ReLU(), self.pred_layer3)
 
         self.s_ix = None
         self.e_ix = None
@@ -655,6 +657,61 @@ class ChunkTrainer(nn.Module):
 
         return self.loss
 
+class ChunkTrainerRel(nn.Module):
+
+    def __init__(self, embd_dim, hidden_dim, kernel_dim, enc_dim, target_dim):
+
+        super(ChunkTrainerRel, self).__init__()
+
+        self.embd_dim = embd_dim
+        self.hidden_dim = hidden_dim
+        self.kernel_dim = kernel_dim
+        self.enc_dim = enc_dim
+        self.target_dim = target_dim
+
+        self.kernel_net = KernelVar(self.embd_dim, self.hidden_dim, self.kernel_dim)
+        self.sampler = MarginalSampler()
+        self.pred_net = PredNet(self.embd_dim, self.hidden_dim, self.enc_dim, self.target_dim)
+
+        self.criterion = nn.MSELoss()
+        self.activation = None
+        
+        self.pred = None
+
+        self.pred_loss = None 
+        self.reg_loss = None
+        self.loss = None
+
+        self.reg = None
+        self.reg_mean = None
+
+    def forward(self, words, target):
+
+        kernel, words = self.kernel_net(words) # returned words are masked now!
+
+        self.sampler.s_ix = self.kernel_net.s_ix
+        self.sampler.e_ix = self.kernel_net.e_ix
+        
+        weighted_words = self.sampler(kernel, words) 
+        
+        self.pred_net.s_ix = self.sampler.s_ix
+        self.pred_net.e_ix = self.sampler.e_ix
+        
+        self.pred = self.pred_net(weighted_words)
+
+        if self.activation:
+            self.pred = self.activation(self.pred)
+
+        self.pred_loss = self.criterion(self.pred, target)
+
+        if self.reg:
+            perc_extract = (torch.stack(self.sampler.exp_sizes) / Variable(self.kernel_net.lengths.squeeze(2).data))
+            self.reg_loss = self.reg * (perc_extract - (self.reg_mean / 100)).pow(2).mean()
+            self.loss = self.pred_loss + self.reg_loss
+        else:
+            self.loss = self.pred_loss
+
+        return self.loss
 
 ## Kernel Network
 # Input: words (batch_size x max_set_size x embd_dim)
