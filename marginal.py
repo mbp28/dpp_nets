@@ -84,6 +84,9 @@ def main():
     val_set = BeerDataset(val_path)
     kwargs = {'num_workers': 0, 'pin_memory': True} if args.cuda else {}
 
+    if args.cuda and args.mode == 'chunks':
+        args.batch_size = 500
+
     train_loader = torch.utils.data.DataLoader(train_set, collate_fn=simple_collate, batch_size=args.batch_size, shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(val_set, collate_fn=simple_collate, batch_size=args.batch_size, **kwargs)
 
