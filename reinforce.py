@@ -24,7 +24,7 @@ parser.add_argument( '--start-epoch', default=0, type=int,
                     metavar='N', help='start epoch')
 parser.add_argument('--epochs', default=20, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('--lr', '--learning_rate', default=1e-3, type=float,
+parser.add_argument('--lr', '--learning_rate', default=1e-4, type=float,
                     metavar='', help='initial learning rate')
 parser.add_argument('--reg', type=float, required=True,
                     metavar='reg', help='regularization constant')
