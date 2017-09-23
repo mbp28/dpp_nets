@@ -17,8 +17,6 @@ from collections import defaultdict
 
 class SimKDPP(object):
 
-    def __init__(self, network_params, dtype):
-
         # Customizable parameters
         self.set_size = set_size = network_params['set_size'] # 40
         self.n_clusters = n_clusters = network_params['n_clusters'] # 
@@ -81,7 +79,7 @@ class SimKDPP(object):
 
         # Generate words, context, target
         words = dtype(torch.normal(means.index_select(0,index.view(index.numel()))).view(batch_size, set_size, embd_dim))
-        context = dtype(words.sum(1).expand_as(words))
+        context = dtype(words.sum(1, keepdim=True).expand_as(words))
         target = index
 
         return words, context, target 
@@ -128,7 +126,7 @@ class SimKDPP(object):
                 reg_loss = 0
 
             for i, kernel in enumerate(batch_kernel):
-                vals, vecs = custom_decomp()(kernel)
+                
                 for j in range(alpha_iter):
                     subset = DPP()(vals, vecs)
                     actions[i].append(subset)
@@ -176,15 +174,15 @@ class SimKDPP(object):
 
         target = target.expand(set_size, set_size)
         target_mat = (target == target.t()).type(self.dtype)
-        target_sums = target_mat.sum(1)
+        target_sums = target_mat.sum(1, keepdim=True)
 
         subset_mat = subset.expand_as(target_mat).type(self.dtype)
 
-        loss = ((target_mat * subset_mat).sum(1) - torch.ones(set_size).type(self.dtype)).abs()
+        loss = ((target_mat * subset_mat).sum(1, keepdim=True) - torch.ones(set_size).type(self.dtype)).abs()
         loss.div_(target_sums)
         loss = loss.sum()**2
 
-        eval_vec = ((target_mat * subset_mat).sum(1) - torch.ones(set_size).type(self.dtype)).sign() / target_sums
+        eval_vec = ((target_mat * subset_mat).sum(1, keepdim=True) - torch.ones(set_size).type(self.dtype)).sign() / target_sums
         n_missed = (eval_vec * (eval_vec.sign() < 0).type(self.dtype)).abs().sum()
         n_many = (eval_vec * (eval_vec.sign() > 0).type(self.dtype)).sum()
         n_one = n_clusters - n_missed - n_many 
@@ -205,11 +203,11 @@ class SimKDPP(object):
         set_size = target.size(0)
         target = target.expand(set_size, set_size)
         target_mat = (target == target.t()).type(self.dtype)
-        target_sums = target_mat.sum(1)
+        target_sums = target_mat.sum(1, keepdim=True)
     
         subset_mat = subset.expand_as(target_mat).type(self.dtype)
     
-        loss = ((target_mat * subset_mat).sum(1) - torch.ones(set_size).type(self.dtype)).abs()
+        loss = ((target_mat * subset_mat).sum(1, keepdim=True) - torch.ones(set_size).type(self.dtype)).abs()
         loss.div_(target_sums)
         loss = loss.sum()**2
         
@@ -221,11 +219,11 @@ class SimKDPP(object):
         n_clusters = self.n_clusters
         target = target.expand(set_size, set_size)
         target_mat = (target == target.t()).type(self.dtype)
-        target_sums = target_mat.sum(1)
+        target_sums = target_mat.sum(1, keepdim=True)
     
         subset_mat = subset.expand_as(target_mat).type(self.dtype)
     
-        eval_vec = ((target_mat * subset_mat).sum(1) - torch.ones(set_size).type(self.dtype)).sign() / target_sums
+        eval_vec = ((target_mat * subset_mat).sum(1, keepdim=True) - torch.ones(set_size).type(self.dtype)).sign() / target_sums
         n_missed = (eval_vec * (eval_vec.sign() < 0).type(self.dtype)).abs().sum()
         n_many = (eval_vec * (eval_vec.sign() > 0).type(self.dtype)).sum()
         n_one = n_clusters - n_missed - n_many 
@@ -385,7 +383,6 @@ class SimKDPPDeepSet(object):
 
         self.pred_net.type(self.dtype)
 
-
         # Data
         np.random.seed(0)
         self.means = dtype(np.random.randint(-50,50,[n_clusters, int(pred_in)]).astype("float"))
@@ -432,7 +429,7 @@ class SimKDPPDeepSet(object):
 
         # Generate words, context, target
         words = dtype(torch.normal(means.index_select(0,index.view(index.numel()))).view(batch_size, set_size, embd_dim))
-        context = dtype(words.sum(1).expand_as(words))
+        context = dtype(words.sum(1, keepdim=True).expand_as(words))
 
         target = torch.pow(torch.log1p(words.abs()).mean(1),2).squeeze()
 
@@ -461,10 +458,7 @@ class SimKDPPDeepSet(object):
         self.ssize_dict.clear()
 
         for t in range(train_iter):
-            actions = self.saved_subsets = [[] for i in range(batch_size)]
-            rewards = self.saved_losses =  [[] for i in range(batch_size)]
-            picks = [[] for i in range(batch_size)]
-
+k
             cum_loss = 0.
             cum_prec = 0.
             cum_rec = 0.
@@ -486,7 +480,7 @@ class SimKDPPDeepSet(object):
                 vals, vecs = custom_decomp()(kernel)
                 for j in range(alpha_iter):
                     subset = DPP()(vals, vecs)
-                    pick = subset.diag().mm(Variable(words[i])).sum(0) 
+                    pick = subset.diag().mm(.a(words[i])).sum(0, keepdim=True) 
                     actions[i].append(subset)
                     picks[i].append(pick)
                     _, prec, rec, ssize  = self._big_assess(index[i], subset.data)
@@ -541,15 +535,15 @@ class SimKDPPDeepSet(object):
 
         target = target.expand(set_size, set_size)
         target_mat = (target == target.t()).type(self.dtype)
-        target_sums = target_mat.sum(1)
+        target_sums = target_mat.sum(1, keepdim=True)
 
         subset_mat = subset.expand_as(target_mat).type(self.dtype)
 
-        loss = ((target_mat * subset_mat).sum(1) - torch.ones(set_size).type(self.dtype)).abs()
+        loss = ((target_mat * subset_mat).sum(1, keepdim=True) - torch.ones(set_size).type(self.dtype)).abs()
         loss.div_(target_sums)
         loss = loss.sum()**2
 
-        eval_vec = ((target_mat * subset_mat).sum(1) - torch.ones(set_size).type(self.dtype)).sign() / target_sums
+        eval_vec = ((target_mat * subset_mat).sum(1, keepdim=True) - torch.ones(set_size).type(self.dtype)).sign() / target_sums
         n_missed = (eval_vec * (eval_vec.sign() < 0).type(self.dtype)).abs().sum()
         n_many = (eval_vec * (eval_vec.sign() > 0).type(self.dtype)).sum()
         n_one = n_clusters - n_missed - n_many 
@@ -570,11 +564,11 @@ class SimKDPPDeepSet(object):
         set_size = target.size(0)
         target = target.expand(set_size, set_size)
         target_mat = (target == target.t()).type(self.dtype)
-        target_sums = target_mat.sum(1)
+        target_sums = target_mat.sum(1, keepdim=True)
     
         subset_mat = subset.expand_as(target_mat).type(self.dtype)
     
-        loss = ((target_mat * subset_mat).sum(1) - torch.ones(set_size).type(self.dtype)).abs()
+        loss = ((target_mat * subset_mat).sum(1, keepdim=True) - torch.ones(set_size).type(self.dtype)).abs()
         loss.div_(target_sums)
         loss = loss.sum()**2
         
@@ -586,11 +580,11 @@ class SimKDPPDeepSet(object):
         n_clusters = self.n_clusters
         target = target.expand(set_size, set_size)
         target_mat = (target == target.t()).type(self.dtype)
-        target_sums = target_mat.sum(1)
+        target_sums = target_mat.sum(1, keepdim=True)
     
         subset_mat = subset.expand_as(target_mat).type(self.dtype)
     
-        eval_vec = ((target_mat * subset_mat).sum(1) - torch.ones(set_size).type(self.dtype)).sign() / target_sums
+        eval_vec = ((target_mat * subset_mat).sum(1, keepdim=True) - torch.ones(set_size).type(self.dtype)).sign() / target_sums
         n_missed = (eval_vec * (eval_vec.sign() < 0).type(self.dtype)).abs().sum()
         n_many = (eval_vec * (eval_vec.sign() > 0).type(self.dtype)).sum()
         n_one = n_clusters - n_missed - n_many 
@@ -681,7 +675,7 @@ class SimKDPPDeepSet(object):
             for i, kernel in enumerate(batch_kernel):
                 vals, vecs = custom_decomp()(kernel)
                 subset = DPP()(vals, vecs)
-                pick = subset.diag().mm(Variable(words[i])).sum(0) 
+                pick = subset.diag().mm(Variable(words[i])).sum(0, keepdim=True) 
                 picks[i].append(pick)
 
                 _, prec, rec, ssize  = self._big_assess(index[i], subset.data)
@@ -832,7 +826,7 @@ class SimFilter(object):
             targets[i] = idx 
 
         words = words.normal_().type(dtype)
-        context = words.sum(1).expand_as(words).type(dtype)
+        context = words.sum(1, keepdim=True).expand_as(words).type(dtype)
 
         return words, context, targets
 
@@ -855,7 +849,6 @@ class SimFilter(object):
         """
         Training the model. 
         Doesn't use the forward pass as want to sample repeatedly!
-
         """
         set_size = self.set_size
         kernel_in = self.kernel_in
@@ -1035,3 +1028,17 @@ class SimFilter(object):
 
         print("How many signals missed totally:", n_missed / n_sig)
         print("How many signals caught totally:", n_caught / n_sig)
+
+
+
+
+######################################################
+######################################################
+######################################################
+######################################################
+######################################################
+######################################################
+######################################################
+######################################################
+
+#### Make a prediction based on the subset using pred net!!

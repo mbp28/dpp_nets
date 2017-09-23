@@ -343,6 +343,37 @@ def custom_collate(batch, vocab, cuda=False):
     
     return data_tensor, target_tensor
 
+def custom_collate_reinforce(batch, vocab, alpha_iter, cuda=False):
+
+    # Count sizes - no tensor operations
+    max_no_chunks = 0
+    
+    for d in batch:
+        max_no_chunks = max(max_no_chunks, len(vocab.filterReview(d['review'])))
+    
+    # Map to Embeddings
+    reps = []
+    for d in batch:
+        rep = vocab.returnEmbds(d['review'])
+        if cuda:
+            rep = torch.cat([rep, Variable(torch.zeros(max_no_chunks + 1 - rep.size(0), rep.size(1))).cuda()], dim=0)
+        else:
+            rep = torch.cat([rep, Variable(torch.zeros(max_no_chunks + 1 - rep.size(0), rep.size(1)))], dim=0)
+        reps.append(rep)
+    
+    data_tensor = torch.stack(reps) 
+    
+    # Create target vector
+    # target_tensor = Variable(torch.stack([d['target'] for d in batch]))
+    if cuda: 
+        target_tensor = Variable(torch.stack([d['target'] for d in batch for _ in range(alpha_iter)]).cuda())
+    else:
+        target_tensor = Variable(torch.stack([d['target'] for d in batch for _ in range(alpha_iter)]))
+    
+    return data_tensor, target_tensor
+
+
+
 class EvalSet():
     
     def __init__(self, rat_path, vocab, mode='words'):
@@ -440,6 +471,8 @@ class EvalSet():
             raise
             
         for i, (review, target) in enumerate(zip(reviews, self.targets), 1):
+
+
             
             trainer(self.vocab.returnEmbds(review.clean.keys()).unsqueeze(0), Variable(target))
             loss = trainer.loss.data[0]
@@ -454,7 +487,50 @@ class EvalSet():
             total_reg_loss += (delta / i)
         
         return total_loss, total_pred_loss, total_reg_loss
+
+    def computeMAPPredLoss(self, trainer, mode):
     
+        trainer.eval()
+        
+        total_loss = 0.0
+        total_pred_loss = 0.0
+        total_reg_loss = 0.0
+        
+        if mode == 'words':
+            reviews = self.words
+        elif mode == 'chunks':
+            reviews = self.chunks
+        elif mode == 'sents':
+            reviews = self.sents
+        else:
+            raise
+            
+        for i, (review, target) in enumerate(zip(reviews, self.targets), 1):
+
+            words = self.vocab.returnEmbds(review.clean.keys()).unsqueeze(0)
+
+            kernel, _ = trainer.kernel_net(words)
+            L = (kernel.data.mm(kernel.data.t())).numpy()
+            return_ixs = computeMAP(L)
+            fwords = words[:, return_ixs, :].squeeze(0)
+            
+            trainer.pred_net.s_ix = [0]
+            trainer.pred_net.e_ix = [len(return_ixs)]
+
+            trainer.pred = trainer.pred_net(fwords)
+
+            if trainer.activation:
+                trainer.pred = trainer.activation(trainer.pred)
+
+            trainer.pred_loss = trainer.criterion(trainer.pred, Variable(target))
+
+            pred_loss = trainer.pred_loss.data[0]
+
+            delta = pred_loss - total_pred_loss 
+            total_pred_loss += (delta / i)
+        
+        return total_pred_loss
+
     def evaluatePrecision(self, trainer, mode):
         
         trainer.eval()
@@ -466,7 +542,7 @@ class EvalSet():
         elif mode == 'chunks':
             reviews = self.chunks
         elif mode == 'sents':
-            reviews == self.sents
+            reviews = self.sents
         else:
             raise
         
@@ -493,6 +569,8 @@ class EvalSet():
         return mean_prec, text_extract
     
     def sample(self, trainer, mode, ix=None):
+
+        trainer.eval()
         
         if not ix:
             ix = random.randint(0,1000)
@@ -508,6 +586,7 @@ class EvalSet():
 
         review = reviews[ix]
         labelled_doc = self.labelled_docs[ix]
+        target = self.targets[ix]
 
         # Compute MAP
         kernel, _ = trainer.kernel_net(self.vocab.returnEmbds(review.clean.keys()).unsqueeze(0))
@@ -534,6 +613,16 @@ class EvalSet():
         print('Extraction Percentage is:', extract)
         
         print(self.labelled_docs[ix])
+
+        # Prediction and target
+        trainer(self.vocab.returnEmbds(review.clean.keys()).unsqueeze(0), Variable(target))
+        pred = trainer.pred.data
+        loss = trainer.loss.data[0]
+        pred_loss = trainer.pred_loss.data[0]
+        reg_loss = trainer.reg_loss.data[0]
+
+        print(pred, target)
+        print('Loss:', loss, 'Pred Loss', pred_loss, 'Reg Loss', reg_loss)
 
     def computeMarginals(self, trainer, mode, ix=None):
 

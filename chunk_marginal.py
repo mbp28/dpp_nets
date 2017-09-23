@@ -72,6 +72,8 @@ def main():
     print("loaded data")
 
     torch.manual_seed(0)
+
+    if
     train_loader = DataLoader(train_set, args.batch_size, shuffle=True)
     val_loader = DataLoader(val_set, args.batch_size)
     print("loader defined")
