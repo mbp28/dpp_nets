@@ -133,7 +133,12 @@ def main():
 
         if os.path.isfile(check_path):
             print("=> loading checkpoint '{}'".format(check_path))
-            checkpoint = torch.load(check_path)
+            
+            if args.cuda():
+                checkpoint = torch.load(check_path)
+            else:
+                checkpoint = torch.load(check_path, map_location=lambda storage, loc: storage)
+
             args.start_epoch = len(checkpoint['train_loss'])
             lowest_loss = checkpoint['lowest_loss']
             
