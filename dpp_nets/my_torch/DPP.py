@@ -268,7 +268,7 @@ class AllInOne(StochasticFunction):
 
         if subset_sum:
             # auxillary
-            P = torch.eye(n).masked_select(subset.expand(n,n).t().byte()).view(subset_sum, -1).type(dtype)
+            P = torch.eye(n).type(dtype).masked_select(subset.expand(n,n).t().byte()).view(subset_sum, -1).type(dtype)
             subembd = P.mm(kernel)
             submatrix = subembd.mm(subembd.t())
             submatinv = torch.inverse(submatrix)
