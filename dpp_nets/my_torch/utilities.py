@@ -14,7 +14,8 @@ def omit_slice(tensor, dim, omit):
     sizes.reverse()
 
     # Create index        
-    index = torch.LongTensor([*range(omit), *range(omit + 1, l)])
+    index = tensor.new().resize_(l-1).copy_(torch.LongTensor([*range(omit), *range(omit + 1, l)])).long()
+    # index = torch.LongTensor([*range(omit), *range(omit + 1, l)])
     index = index.expand(*sizes, index.size(0)).permute(*range(len(sizes),-1,-1))
     
     # Apply filter
