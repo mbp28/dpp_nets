@@ -773,7 +773,7 @@ class ChunkTrainerRelReinforce(nn.Module):
             self.loss = self.pred_loss
 
         # add computation of baselines and registering rewards here!!
-        losses = (self.pred - target).pow(2).view(-1, self.alpha_iter, target.size(1)).mean(2, keepdim=True)
+        losses = (self.pred - target).pow(2).view(-1, self.alpha_iter, target.size(-1)).mean(2, keepdim=True)
 
         self.saved_losses = [[i.data[0] for i in row] for row in losses]
         if self.alpha_iter > 1:
@@ -791,6 +791,82 @@ class ChunkTrainerRelReinforce(nn.Module):
                 
         return self.loss
 
+class ChunkTrainerReinforce(nn.Module):
+
+    def __init__(self, embd_dim, hidden_dim, kernel_dim, enc_dim, target_dim, alpha_iter):
+
+        super(ChunkTrainerReinforce, self).__init__()
+
+        self.embd_dim = embd_dim
+        self.hidden_dim = hidden_dim
+        self.kernel_dim = kernel_dim
+        self.enc_dim = enc_dim
+        self.target_dim = target_dim
+        self.alpha_iter = alpha_iter
+
+        self.kernel_net = KernelVar(self.embd_dim, self.hidden_dim, self.kernel_dim)
+        self.sampler = ReinforceSampler(alpha_iter)
+        self.pred_net = PredNet(self.embd_dim, self.hidden_dim, self.enc_dim, self.target_dim)
+
+        self.criterion = nn.MSELoss()
+        self.activation = None
+        
+        self.pred = None
+
+        self.pred_loss = None 
+        self.reg_loss = None
+        self.loss = None
+
+        self.reg = None
+        self.reg_mean = None
+
+        self.saved_subsets = None
+        self.saved_losses = None
+        self.saved_baselines = None
+
+    def forward(self, words, target):
+
+        kernel, words = self.kernel_net(words) # returned words are masked now!
+
+        self.sampler.s_ix = self.kernel_net.s_ix
+        self.sampler.e_ix = self.kernel_net.e_ix
+        
+        weighted_words = self.sampler(kernel, words) 
+        
+        self.pred_net.s_ix = self.sampler.s_ix
+        self.pred_net.e_ix = self.sampler.e_ix
+        
+        self.pred = self.pred_net(weighted_words)
+
+        if self.activation:
+            self.pred = self.activation(self.pred)
+
+        self.pred_loss = self.criterion(self.pred, target)
+
+        if self.reg:
+            self.reg_loss = self.reg * (torch.stack(self.sampler.exp_sizes) - self.reg_mean).pow(2).mean()
+            self.loss = self.pred_loss + self.reg_loss
+        else:
+            self.loss = self.pred_loss
+
+        # add computation of baselines and registering rewards here!!
+        losses = (self.pred - target).pow(2).view(-1, self.alpha_iter, target.size(-1)).mean(2, keepdim=True)
+
+        self.saved_losses = [[i.data[0] for i in row] for row in losses]
+        if self.alpha_iter > 1:
+            self.saved_baselines = [compute_baseline(i) for i in self.saved_losses]
+        else:
+            self.saved_baselines = self.saved_losses
+
+        self.saved_subsets = self.sampler.saved_subsets
+        #print("executed")
+        #print('We have so many subsets: ',len(self.saved_subsets))
+
+        for actions, rewards in zip(self.saved_subsets, self.saved_baselines):
+            for action, reward in zip(actions, rewards):
+                action.reinforce(reward)
+                
+        return self.loss
 
 
 

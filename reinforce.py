@@ -125,11 +125,11 @@ def main():
     # optionally resume from a checkpoint
     if args.resume:
         if args.remote:
-            check_path = '/home/paulusm/checkpoints/beer_reviews/reinforce/' + args.resume
+            check_path = '/home/paulusm/checkpoints/beer_reviews/' + args.resume
             if args.euler:
                 check_path = '/cluster' + check_path
         else:
-            check_path = '/Users/Max/checkpoints/beer_reviews/reinforce/' + args.resume
+            check_path = '/Users/Max/checkpoints/beer_reviews/' + args.resume
 
         if os.path.isfile(check_path):
             print("=> loading checkpoint '{}'".format(check_path))
@@ -146,6 +146,9 @@ def main():
 
             if not (args.reg == checkpoint['reg'] and args.reg_mean == checkpoint['reg_mean'] and args.mode == checkpoint['mode']):
                 print('wrong specs')
+            if not args.mode == checkpoint['mode']:
+                print('You confused mode')
+                assert args.mode == checkpoint['mode']
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 

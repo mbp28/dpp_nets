@@ -492,9 +492,8 @@ class EvalSet():
     
         trainer.eval()
         
-        total_loss = 0.0
         total_pred_loss = 0.0
-        total_reg_loss = 0.0
+        total_extract = 0.0
         
         if mode == 'words':
             reviews = self.words
@@ -528,8 +527,19 @@ class EvalSet():
 
             delta = pred_loss - total_pred_loss 
             total_pred_loss += (delta / i)
+
+            # Compute Extract %
+            labelled_doc = self.labelled_docs[i - 1]
+            rats = [list(review.rev.values())[ix] for ix in return_ixs]
+            lens = [max([len(l) for l in rat]) for rat in rats]
+            review_lens = [len(sen) for sen, _ in labelled_doc]
+            extract = sum(lens) / sum(review_lens)
+
+            delta = extract - total_extract
+            total_extract += (delta / i)
+
         
-        return total_pred_loss
+        return total_pred_loss, total_extract
 
     def evaluatePrecision(self, trainer, mode):
         
@@ -676,3 +686,51 @@ class EvalSet():
             total_loss += (delta / i)
         
         return total_loss
+
+    def computeMUEPredLoss(self, trainer, mode, n_runs):
+    
+        trainer.eval()
+        trainer.alpha_iter = n_runs
+        trainer.sampler.alpha_iter = n_runs
+
+        total_pred_loss1 = 0.0
+        total_pred_loss2 = 0.0
+        
+        if mode == 'words':
+            reviews = self.words
+        elif mode == 'chunks':
+            reviews = self.chunks
+        elif mode == 'sents':
+            reviews = self.sents
+        else:
+            raise
+            
+        for i, (review, t) in enumerate(zip(reviews, self.targets), 1):
+
+            words = self.vocab.returnEmbds(review.clean.keys()).unsqueeze(0)
+            target = Variable(torch.stack([t for _ in range(n_runs)]))
+            trainer(words, target)
+
+            # Now pick a prediction using Maximum Utility Expectation Principle
+            pred1 = trainer.pred.mean(0)
+            _, pred_ix = torch.min((trainer.pred - pred1).pow(2).mean(1).data,0)
+            pred2 = trainer.pred[pred_ix]
+
+            # Evaluate that prediction (pred1)
+            trainer.pred_loss = trainer.criterion(pred1, Variable(t))
+            pred_loss = trainer.pred_loss.data[0]
+            delta = pred_loss - total_pred_loss1
+            total_pred_loss1 += (delta / i)
+
+            # Evaluate that prediction (pred2)
+            trainer.pred_loss = trainer.criterion(pred2, Variable(t))
+            pred_loss = trainer.pred_loss.data[0]
+            delta = pred_loss - total_pred_loss2
+            total_pred_loss2 += (delta / i)
+            
+        trainer.alpha_iter = 1
+        trainer.sampler.alpha_iter = 1
+
+        return total_pred_loss1, total_pred_loss2
+
+
