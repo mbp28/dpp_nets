@@ -207,23 +207,31 @@ class DPP(StochasticFunction):
 
         # grad_vals = 1 / vals
         # grad_vecs = torch.zeros(n, n_vals).type(dtype)
-        grad_vals = 1 / vals
-        grad_vecs = vecs.new().resize_(n, n_vals).copy_(torch.zeros(n, n_vals))
+        
+            grad_vals = 1 / vals
+            grad_vecs = vecs.new().resize_(n, n_vals).copy_(torch.zeros(n, n_vals))
 
-        if subset_sum:
-            running_ix = subset.new().resize_(n).copy_(torch.arange(0,n))
-            ix = (subset * running_ix).nonzero().squeeze()
-            Pvecs = vecs[ix,:].squeeze(1)
+        try:
+            if subset_sum:
+                running_ix = subset.new().resize_(n).copy_(torch.arange(0,n))
+                ix = (subset * running_ix).nonzero().squeeze()
+                Pvecs = vecs[ix,:].squeeze(1)
 
-            submatrix = Pvecs.mm(vals.diag()).mm(Pvecs.t())
-            subinv = torch.inverse(submatrix)
+                submatrix = Pvecs.mm(vals.diag()).mm(Pvecs.t())
+                subinv = torch.inverse(submatrix)
 
-            grad_vals += Pvecs.t().mm(subinv).mm(Pvecs).diag()
-            grad_vecs[ix,:] += subinv.mm(Pvecs).mm(vals.diag())    
+                grad_vals += Pvecs.t().mm(subinv).mm(Pvecs).diag()
+                grad_vecs[ix,:] += subinv.mm(Pvecs).mm(vals.diag())    
 
-        grad_vals.mul_(reward)
-        grad_vecs.mul_(reward)
-
+            grad_vals.mul_(reward)
+            grad_vecs.mul_(reward)
+        
+        except RuntimeError:
+            grad_vals.copy_(torch.zeros(n_vals))
+            grad_vecs.copy_(torch.zeros(n, n_vals))
+            print('An Error occured.')
+        
+        finally:
         return grad_vals, grad_vecs
 
 class AllInOne(StochasticFunction):
