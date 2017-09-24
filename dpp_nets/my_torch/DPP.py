@@ -211,9 +211,8 @@ class DPP(StochasticFunction):
         grad_vecs = vecs.new().resize_(n, n_vals).copy_(torch.zeros(n, n_vals))
 
         if subset_sum:
-            print(subset.type())
-            print(torch.arange(0,n).type())
-            ix = subset.new().resize_(n).copy_((subset * torch.arange(0,n))).nonzero()
+            running_ix = subset.new().resize_(n).copy_(torch.arange(0,n))
+            ix = (subset * running_ix).nonzero()
             Pvecs = vecs[ix,:].squeeze(1)
 
             submatrix = Pvecs.mm(vals.diag()).mm(Pvecs.t())
