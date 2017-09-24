@@ -3,6 +3,7 @@ import os
 import shutil
 import nltk
 from collections import defaultdict
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -210,7 +211,7 @@ def train(loader, trainer, optimizer):
     total_reg_loss = 0.0
 
 
-    for i, batch in enumerate(loader, 1):
+    for i, batch in tqdm(enumerate(loader, 1)):
 
         reviews, target = custom_collate_reinforce(batch, vocab, args.alpha_iter, args.cuda)
 
