@@ -174,7 +174,7 @@ class DPP(StochasticFunction):
         if subset_sum:
             # auxillary
             matrix = vecs.mm(vals.diag()).mm(vecs.t())
-            P = torch.eye(n).masked_select(subset.expand(n,n).t().byte()).view(subset_sum, -1).type(dtype)
+            P = torch.eye(n).type(dtype).masked_select(subset.expand(n,n).t().byte()).view(subset_sum, -1).type(dtype)
             submatrix = P.mm(matrix).mm(P.t())
             subinv = torch.inverse(submatrix)
             Pvecs = P.mm(vecs)
