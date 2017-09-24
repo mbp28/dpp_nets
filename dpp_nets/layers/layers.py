@@ -377,8 +377,8 @@ class ReinforceSampler(nn.Module):
             exp_size = (vals / (1 + vals)).pow(2).sum()
             for j in range(alpha_iter):
                 while True: # to avoid zero subsets, problematic as not unbiased anymore, temp fix.
-                    subset = AllInOne()(V) # scrap this after gradient check!
-                    #subset = DPP()(vals, vecs)
+                    # subset = AllInOne()(V) # scrap this after gradient check!
+                    subset = DPP()(vals, vecs)
                     if subset.data.sum() >= 1:
                         break
                     else:

@@ -590,7 +590,7 @@ class EvalSet():
         elif mode == 'chunks':
             reviews = self.chunks
         elif mode == 'sents':
-            reviews == self.sents
+            reviews = self.sents
         else:
             raise
 
@@ -644,7 +644,7 @@ class EvalSet():
             elif mode == 'chunks':
                 reviews = self.chunks
             elif mode == 'sents':
-                reviews == self.sents
+                reviews = self.sents
             else:
                 raise
 

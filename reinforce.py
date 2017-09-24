@@ -141,7 +141,7 @@ def main():
                 checkpoint = torch.load(check_path, map_location=lambda storage, loc: storage)
 
             args.start_epoch = len(checkpoint['train_loss'])
-            lowest_loss = checkpoint['lowest_loss']
+            #lowest_loss = checkpoint['lowest_loss']
             
             trainer.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['optimizer'])
