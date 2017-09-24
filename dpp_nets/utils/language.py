@@ -418,6 +418,8 @@ class EvalSet():
         self.words = [self.__complementDict(defdict) for defdict in self.words]
         self.chunks = [self.__complementDict(defdict) for defdict in self.chunks]
         self.sents = [self.__complementDict(defdict) for defdict in self.sents]
+
+        self.MAPS = []
         
     def __complementDict(self, def_dict):
     
@@ -732,5 +734,43 @@ class EvalSet():
         trainer.sampler.alpha_iter = 1
 
         return total_pred_loss1, total_pred_loss2
+
+    def create_MAPS(self, trainer, mode):
+
+        self.MAPS = []
+    
+        trainer.eval()
+                
+        if mode == 'words':
+            reviews = self.words
+        elif mode == 'chunks':
+            reviews = self.chunks
+        elif mode == 'sents':
+            reviews = self.sents
+        else:
+            raise
+            
+        for i, (review, target) in enumerate(zip(reviews, self.targets), 1):
+
+            words = self.vocab.returnEmbds(review.clean.keys()).unsqueeze(0)
+
+            # Compute MAP
+            kernel, _ = trainer.kernel_net(words)
+            L = (kernel.data.mm(kernel.data.t())).numpy()
+            return_ixs = computeMAP(L)
+
+            MAP = []
+            
+            for i in return_ixs:
+                txt = list(review.clean.keys())[i]
+                label = list(review.clean.values())[i]
+                rat = review.rev[txt]
+                MAP.extend(rat)
+
+            mean_target = target.mean()
+            
+            self.MAPS.append((MAP, mean_target))
+
+
 
 

@@ -151,7 +151,6 @@ class DPP(StochasticFunction):
             submatrix = P.mm(matrix).mm(P.t())
             subinv = torch.inverse(submatrix)
             Pvecs = P.mm(vecs)
-            print('backwarded once.')
         
             # gradiens
             grad_vals = 1 / vals
@@ -179,6 +178,7 @@ class DPP(StochasticFunction):
             submatrix = P.mm(matrix).mm(P.t())
             subinv = torch.inverse(submatrix)
             Pvecs = P.mm(vecs)
+            print('backwarded once.')
 
             grad_vals += Pvecs.t().mm(subinv).mm(Pvecs).diag()
             grad_vecs += P.t().mm(subinv).mm(Pvecs).mm(vals.diag())    
