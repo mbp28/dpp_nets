@@ -86,7 +86,7 @@ def main():
     # Set up datasets and -loader
     train_set = BeerDataset(train_path)
     val_set = BeerDataset(val_path)
-    kwargs = {'num_workers': 0, 'pin_memory': True} if args.cuda else {}
+    kwargs = {'num_workers': 0, 'pin_memory': False} if args.cuda else {}
 
     if args.cuda and args.mode == 'chunks':
         args.batch_size = 500
