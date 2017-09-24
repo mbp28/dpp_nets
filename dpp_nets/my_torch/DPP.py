@@ -229,7 +229,7 @@ class DPP(StochasticFunction):
         except RuntimeError:
             grad_vals.copy_(torch.zeros(n_vals))
             grad_vecs.copy_(torch.zeros(n, n_vals))
-            print('An Error occured.')
+            print('An Error occured. Sub-Routine.')
         
         finally:
             return grad_vals, grad_vecs

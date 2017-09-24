@@ -19,7 +19,7 @@ parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', '
                     help='what is the target?', required=True)
 parser.add_argument('-m', '--mode', type=str, choices=['words', 'chunks', 'sents'],
                     help='what is the mode?', required=True)
-parser.add_argument('-b', '--batch-size', default=100, type=int,
+parser.add_argument('-b', '--batch-size', default=1000, type=int,
                     metavar='N', help='mini-batch size (default: 1000)')
 parser.add_argument( '--start-epoch', default=0, type=int,
                     metavar='N', help='start epoch')
@@ -210,6 +210,8 @@ def train(loader, trainer, optimizer):
     total_pred_loss = 0.0
     total_reg_loss = 0.0
 
+    exceptions = 0
+
 
     for i, batch in tqdm(enumerate(loader, 1)):
 
@@ -218,8 +220,14 @@ def train(loader, trainer, optimizer):
         loss = trainer(reviews, target)
         
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+
+        try:
+            loss.backward()
+            optimizer.step()
+        except: 
+            print('An Error occured in this batch. Batch was ignored.')
+            exceptions += 1
+            pass
 
         loss, pred_loss, reg_loss = trainer.loss.data[0], trainer.pred_loss.data[0], trainer.reg_loss.data[0]
 
@@ -231,6 +239,8 @@ def train(loader, trainer, optimizer):
         total_reg_loss += (delta / i)
 
         print("trained one batch")
+
+    print('No of exceptions in this epoch:', exceptions)
 
     return total_loss, total_pred_loss, total_reg_loss
 
@@ -275,21 +285,21 @@ def save_checkpoint(state, is_best, filename='reinforce_chunk_checkpoint.pth.tar
     State is a dictionary that cotains valuable information to be saved.
     """
     if args.remote:
-        destination = '/home/paulusm/checkpoints/beer_reviews/reinforce/' + str(args.aspect) + str(args.mode) + str(args.seed) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + 'reinforce_ckp.pth.tar'
+        destination = '/home/paulusm/checkpoints/beer_reviews/reinforce/' + str(args.aspect) + str(args.mode) + str(args.seed) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + str(args.alpha_iter) + 'reinforce_ckp.pth.tar'
         if args.euler:
             destination = '/cluster' + destination
     else:
-        destination = '/Users/Max/checkpoints/beer_reviews/reinforce/' + str(args.aspect) + str(args.mode) + str(args.seed) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) +  'reinforce_ckp.pth.tar'
+        destination = '/Users/Max/checkpoints/beer_reviews/reinforce/' + str(args.aspect) + str(args.mode) + str(args.seed) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + str(args.alpha_iter) +  'reinforce_ckp.pth.tar'
 
     torch.save(state, destination)
 
     if is_best:
         if args.remote:
-            best_destination = '/home/paulusm/checkpoints/beer_reviews/reinforce/' + str(args.aspect) + str(args.mode) + str(args.seed) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + 'reinforce_best_ckp.pth.tar'
+            best_destination = '/home/paulusm/checkpoints/beer_reviews/reinforce/' + str(args.aspect) + str(args.mode) + str(args.seed) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + str(args.alpha_iter) +  'reinforce_best_ckp.pth.tar'
             if args.euler:
                 best_destination = '/cluster' + best_destination
         else:
-            best_destination = '/Users/Max/checkpoints/beer_reviews/reinforce/' + str(args.aspect) + str(args.mode) + str(args.seed) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + 'reinforce_best_ckp.pth.tar'
+            best_destination = '/Users/Max/checkpoints/beer_reviews/reinforce/' + str(args.aspect) + str(args.mode) + str(args.seed) + 'reg' + str(args.reg) + 'reg_mean' + str(args.reg_mean) + 'lr' + str(args.lr) + str(args.alpha_iter) + 'reinforce_best_ckp.pth.tar'
 
         shutil.copyfile(destination, best_destination)
 
