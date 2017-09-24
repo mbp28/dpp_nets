@@ -232,7 +232,7 @@ class DPP(StochasticFunction):
             print('An Error occured.')
         
         finally:
-        return grad_vals, grad_vecs
+            return grad_vals, grad_vecs
 
 class AllInOne(StochasticFunction):
     
