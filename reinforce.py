@@ -19,7 +19,7 @@ parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', '
                     help='what is the target?', required=True)
 parser.add_argument('-m', '--mode', type=str, choices=['words', 'chunks', 'sents'],
                     help='what is the mode?', required=True)
-parser.add_argument('-b', '--batch-size', default=1000, type=int,
+parser.add_argument('-b', '--batch-size', default=100, type=int,
                     metavar='N', help='mini-batch size (default: 1000)')
 parser.add_argument( '--start-epoch', default=0, type=int,
                     metavar='N', help='start epoch')
