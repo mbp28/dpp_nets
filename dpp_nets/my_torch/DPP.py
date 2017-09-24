@@ -200,8 +200,6 @@ class DPP(StochasticFunction):
 
         vals, vecs, subset = self.saved_tensors
 
-
-
         dtype = self.dtype
         n = vecs.size(0)
         n_vals = vals.size(0) # 
@@ -212,8 +210,9 @@ class DPP(StochasticFunction):
         grad_vals = 1 / vals
         grad_vecs = vecs.new().resize_(n, n_vals).copy_(torch.zeros(n, n_vals))
 
-
         if subset_sum:
+            print(subset.type())
+            print(torch.arange(0,n).type())
             ix = subset.new().resize_(n).copy_((subset * torch.arange(0,n))).nonzero()
             Pvecs = vecs[ix,:].squeeze(1)
 
