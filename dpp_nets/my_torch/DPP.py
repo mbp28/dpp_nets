@@ -208,8 +208,8 @@ class DPP(StochasticFunction):
         # grad_vals = 1 / vals
         # grad_vecs = torch.zeros(n, n_vals).type(dtype)
         
-            grad_vals = 1 / vals
-            grad_vecs = vecs.new().resize_(n, n_vals).copy_(torch.zeros(n, n_vals))
+        grad_vals = 1 / vals
+        grad_vecs = vecs.new().resize_(n, n_vals).copy_(torch.zeros(n, n_vals))
 
         try:
             if subset_sum:
