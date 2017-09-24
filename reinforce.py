@@ -229,7 +229,7 @@ def train(loader, trainer, optimizer):
         delta = reg_loss - total_reg_loss
         total_reg_loss += (delta / i)
 
-        #print("trained one batch")
+        print("trained one batch")
 
     return total_loss, total_pred_loss, total_reg_loss
 
