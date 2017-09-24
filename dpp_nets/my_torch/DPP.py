@@ -162,32 +162,63 @@ class DPP(StochasticFunction):
 
             return grad_vals, grad_vecs
 
-        vals, vecs, subset = self.saved_tensors#
+        if False:
+            vals, vecs, subset = self.saved_tensors#
+            dtype = self.dtype
+            n = vecs.size(0)
+            n_vals = vals.size(0)
+            subset_sum = subset.long().sum()
+
+            grad_vals = 1 / vals
+            grad_vecs = torch.zeros(n, n_vals).type(dtype)
+
+            if subset_sum:
+                # auxillary
+                matrix = vecs.mm(vals.diag()).mm(vecs.t())
+                print(matrix) ## remove later
+                print('Size of matrix', matrix.size()) ## remove later
+                print('Subset Sum', subset_sum) ## remove later
+                print('n', n) ## remove later
+                print('n_vals', n_vals) ## remove later
+                print('dtype', dtype)
+                print('1 P', torch.eye(n).type(dtype))
+                print('2 P', subset.expand(n,n).t().byte())
+                print('3 P', torch.eye(n).type(dtype).masked_select(subset.expand(n,n).t().byte()))
+                P = torch.eye(n).type(dtype).masked_select(subset.expand(n,n).t().byte()).view(subset_sum, -1).type(dtype)
+                submatrix = P.mm(matrix).mm(P.t())
+                subinv = torch.inverse(submatrix)
+                Pvecs = P.mm(vecs)
+                print('backwarded once.')
+
+                grad_vals += Pvecs.t().mm(subinv).mm(Pvecs).diag()
+                grad_vecs += P.t().mm(subinv).mm(Pvecs).mm(vals.diag())    
+
+            grad_vals.mul_(reward)
+            grad_vecs.mul_(reward)
+
+            return grad_vals, grad_vecs
+
+        vals, vecs, subset = self.saved_tensors
+
+
+
         dtype = self.dtype
         n = vecs.size(0)
-        n_vals = vals.size(0)
-        subset_sum = subset.long().sum()
+        n_vals = vals.size(0) # 
+        subset_sum = subset.long().sum() # How large is the subset?
 
+        # grad_vals = 1 / vals
+        # grad_vecs = torch.zeros(n, n_vals).type(dtype)
         grad_vals = 1 / vals
-        grad_vecs = torch.zeros(n, n_vals).type(dtype)
+        grad_vecs = vecs.new().resize_(n, n_vals).copy_(torch.zeros(n, n_vals))
+
 
         if subset_sum:
-            # auxillary
-            matrix = vecs.mm(vals.diag()).mm(vecs.t())
-            print(matrix) ## remove later
-            print('Size of matrix', matrix.size()) ## remove later
-            print('Subset Sum', subset_sum) ## remove later
-            print('n', n) ## remove later
-            print('n_vals', n_vals) ## remove later
-            print('dtype', dtype)
-            print('1 P', torch.eye(n).type(dtype))
-            print('2 P', subset.expand(n,n).t().byte())
-            print('3 P', torch.eye(n).type(dtype).masked_select(subset.expand(n,n).t().byte()))
-            P = torch.eye(n).type(dtype).masked_select(subset.expand(n,n).t().byte()).view(subset_sum, -1).type(dtype)
-            submatrix = P.mm(matrix).mm(P.t())
+            ix = subset.new().resize_(n).copy_((subset * torch.arange(0,n))).nonzero()
+            Pvecs = vecs[ix,:].squeeze(1)
+
+            submatrix = Pvecs.mm(vals.diag()).mm(Pvecs.t())
             subinv = torch.inverse(submatrix)
-            Pvecs = P.mm(vecs)
-            print('backwarded once.')
 
             grad_vals += Pvecs.t().mm(subinv).mm(Pvecs).diag()
             grad_vecs += P.t().mm(subinv).mm(Pvecs).mm(vals.diag())    
