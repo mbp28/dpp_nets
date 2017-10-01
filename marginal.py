@@ -11,7 +11,7 @@ from torch.utils.data.dataloader import DataLoader
 
 from dpp_nets.utils.language import Vocabulary, BeerDataset, simple_collate, custom_collate
 from dpp_nets.layers.layers import ChunkTrainer, ChunkTrainerRel
-
+import gc
 
 parser = argparse.ArgumentParser(description='marginal_chunk Krause Trainer')
 parser.add_argument('-a', '--aspect', type=str, choices=['aspect1', 'aspect2', 'aspect3', 'all', 'short'],
