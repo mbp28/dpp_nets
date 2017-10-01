@@ -56,8 +56,8 @@ def main():
 
     # Set-up data
     if args.remote:
-        train_path = '/home/paulusm/data/beer_reviews/' + 'reviews.' + args.aspect + '.train.' + args.mode + '.txt.gz'
-        val_path = '/home/paulusm/data/beer_reviews/' + 'reviews.' + args.aspect + '.heldout.' + args.mode + '.txt.gz'
+        train_path = '/home/paulusm/data/beer_reviews/' + 'reviews.' + 'all' + '.train.' + args.mode + '.txt.gz'
+        val_path = '/home/paulusm/data/beer_reviews/' + 'reviews.' + 'all' + '.heldout.' + args.mode + '.txt.gz'
         embd_path = '/home/paulusm/data/beer_reviews/' + 'review+wiki.filtered.200.txt.gz'
         word_path = '/home/paulusm/data/beer_reviews/' + 'reviews.' + 'all' + '.train.' + 'words.txt.gz'
         if args.euler:
