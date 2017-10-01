@@ -4,6 +4,7 @@ import shutil
 import nltk
 from collections import defaultdict
 from tqdm import tqdm
+import gc
 
 import torch
 import torch.nn as nn
@@ -202,6 +203,20 @@ def main():
 
     print('*'*20, 'SUCCESS','*'*20)
 
+def memReport():
+    for obj in gc.get_objects():
+        if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+            print(type(obj), obj.size())
+    
+def cpuStats():
+        print(sys.version)
+        print(psutil.cpu_percent())
+        print(psutil.virtual_memory())  # physical memory usage
+        pid = os.getpid()
+        py = psutil.Process(pid)
+        memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB...I think
+        print('memory GB:', memoryUse)
+
 def train(loader, trainer, optimizer):
 
     trainer.train()
@@ -216,7 +231,7 @@ def train(loader, trainer, optimizer):
     for i, batch in tqdm(enumerate(loader, 1)):
 
         reviews, target = custom_collate_reinforce(batch, vocab, args.alpha_iter, args.cuda)
-
+        
         loss = trainer(reviews, target)
         
         optimizer.zero_grad()
@@ -239,6 +254,9 @@ def train(loader, trainer, optimizer):
         total_reg_loss += (delta / i)
 
         print("trained one batch")
+        gc.collect()
+        # cpuStats()
+        # memReport()
 
     print('No of exceptions in this epoch:', exceptions)
 

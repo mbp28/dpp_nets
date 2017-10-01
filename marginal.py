@@ -201,6 +201,13 @@ def train(loader, trainer, optimizer):
     for i, batch in enumerate(loader, 1):
 
         reviews, target = custom_collate(batch, vocab, args.cuda)
+        if args.aspect == 'aspect1':
+            target = target[:,0]
+        if args.aspect == 'aspect2':
+            target = target[:,1]
+        if args.aspect == 'aspect3':
+            target = target[:,2]
+
 
         loss  = trainer(reviews, target)
         
@@ -218,6 +225,7 @@ def train(loader, trainer, optimizer):
         total_reg_loss += (delta / i)
 
         #print("trained one batch")
+        gc.collect()
 
     return total_loss, total_pred_loss, total_reg_loss
 
@@ -232,6 +240,14 @@ def validate(loader, trainer):
     for i, batch in enumerate(loader, 1):
 
         review, target = custom_collate(batch, vocab, args.cuda)
+
+        if args.aspect == 'aspect1':
+            target = target[:,0]
+        if args.aspect == 'aspect2':
+            target = target[:,1]
+        if args.aspect == 'aspect3':
+            target = target[:,2]
+
 
         trainer(review, target)
 
