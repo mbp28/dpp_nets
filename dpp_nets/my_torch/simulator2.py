@@ -219,7 +219,9 @@ class SimulClassifier(object):
             cum_size += set_size 
 
 
-        print(cum_loss / test_iter, cum_acc / test_iter, cum_prec / test_iter, cum_rec / test_iter, cum_size / test_iter)
+        print('Loss:', cum_loss / test_iter, 'Pred Acc:', cum_acc / test_iter, 
+            'Precision:', cum_prec / test_iter, 'Recall:', cum_rec / test_iter, 
+            'Set Size:', cum_size / test_iter)
 
 
     def sample(self):
